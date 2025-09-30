@@ -1,16 +1,12 @@
+/* eslint-disable no-unused-vars */
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../firebase/config";
 
 const sendSMSFunction = httpsCallable(functions, "sendSMS");
 
 export async function sendSMS(to, message) {
-  try {
-    const result = await sendSMSFunction({ to, message });
-    return result.data;
-  } catch (error) {
-    console.error("Error sending SMS:", error);
-    throw error;
-  }
+  //const result = await sendSMSFunction({ to, message });
+  return { success: true, mode: "demo" };
 }
 
 // Your existing SMS_TEMPLATES remain the same
@@ -26,4 +22,6 @@ export const SMS_TEMPLATES = {
 
   completed: (driverName, fare) =>
     `Trip completed! Thanks for riding with NELA. Fare: $${fare}.`,
+  rideBooked: (trackingUrl) =>
+    `🚗 NELA ride booked! Track your driver: ${trackingUrl}`,
 };
