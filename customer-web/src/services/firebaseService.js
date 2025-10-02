@@ -1,7 +1,4 @@
 /* eslint-disable no-unused-vars */
-// STEP 1 FIX: Improved Firebase Auth integration
-// Removed localStorage dependencies, cleaner auth flow
-
 import { db } from "../firebase/config";
 import {
   collection,
@@ -11,6 +8,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -22,37 +20,32 @@ import {
 
 export const auth = getAuth();
 
-// FIXED: Cleaner auth state listener
+export const updateUserProfile = async (userId, updates) => {
+  try {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const onAuthStateChange = (callback) => {
-  return onAuthStateChanged(auth, async (firebaseUser) => {
-    if (firebaseUser) {
+  return onAuthStateChanged(auth, async (user) => {
+    if (user) {
       try {
-        // Get full user profile from Firestore
-        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
-          const userData = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            ...userDoc.data(),
-          };
-          console.log("User profile loaded:", userData.name);
-          callback(userData);
+          callback(userDoc.data());
         } else {
-          // Fallback if Firestore doc doesn't exist
-          callback({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: "User",
-          });
+          callback({ uid: user.uid, email: user.email, name: "User" });
         }
       } catch (error) {
-        console.error("Error loading user profile:", error);
-        // Still provide basic user info
-        callback({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: "User",
-        });
+        callback({ uid: user.uid, email: user.email, name: "User" });
       }
     } else {
       callback(null);
@@ -60,12 +53,9 @@ export const onAuthStateChange = (callback) => {
   });
 };
 
-// FIXED: Improved account creation with better error handling
 export const createUserAccount = async (email, password, userData) => {
   try {
-    console.log("Creating account for:", email);
-
-    // Create Firebase Auth user
+    console.log("Creating user with:", email, userData.name);
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
@@ -73,119 +63,38 @@ export const createUserAccount = async (email, password, userData) => {
     );
     const user = userCredential.user;
 
-    // Create Firestore profile with all user data
-    const userProfile = {
+    const userDoc = {
       uid: user.uid,
       name: userData.name,
       email: userData.email,
       phone: userData.phone,
-      createdAt: new Date(),
+      createdAt: serverTimestamp(),
       totalRides: 0,
-      totalSaved: 0,
-      avgRating: 5.0,
       favorites: [],
       recentLocations: [],
     };
 
-    // Save to Firestore using UID as document ID
-    await setDoc(doc(db, "users", user.uid), userProfile);
-
-    console.log("Account created successfully:", user.uid);
-    return { success: true, user: userProfile };
+    await setDoc(doc(db, "users", user.uid), userDoc);
+    console.log("User profile created successfully");
+    return { success: true, user: userDoc };
   } catch (error) {
-    console.error("Error creating account:", error);
-
-    // User-friendly error messages
-    let errorMessage = error.message;
-    if (error.code === "auth/email-already-in-use") {
-      errorMessage =
-        "This email is already registered. Try signing in instead.";
-    } else if (error.code === "auth/weak-password") {
-      errorMessage = "Password should be at least 6 characters.";
-    } else if (error.code === "auth/invalid-email") {
-      errorMessage = "Invalid email address.";
-    }
-
-    return { success: false, error: errorMessage };
+    console.error("Error creating user:", error);
+    return { success: false, error: error.message };
   }
 };
 
-// FIXED: Improved sign-in with full user data retrieval
 export const signInUser = async (email, password) => {
   try {
-    console.log("Signing in:", email);
-
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
       password
     );
-
-    // Get full user profile from Firestore
-    const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
-
-    if (userDoc.exists()) {
-      const userData = {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        ...userDoc.data(),
-      };
-      console.log("Sign in successful:", userData.name);
-      return { success: true, user: userData };
-    } else {
-      // User exists in Auth but not in Firestore (shouldn't happen)
-      console.warn("User authenticated but no Firestore profile found");
-      return {
-        success: true,
-        user: {
-          uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          name: "User",
-        },
-      };
-    }
+    return {
+      success: true,
+      user: { uid: userCredential.user.uid, email, name: "User" },
+    };
   } catch (error) {
-    console.error("Error signing in:", error);
-
-    // User-friendly error messages
-    let errorMessage = error.message;
-    if (
-      error.code === "auth/user-not-found" ||
-      error.code === "auth/wrong-password"
-    ) {
-      errorMessage = "Invalid email or password.";
-    } else if (error.code === "auth/too-many-requests") {
-      errorMessage = "Too many failed attempts. Please try again later.";
-    }
-
-    return { success: false, error: errorMessage };
-  }
-};
-
-// Sign out function
-export const signOutUser = async () => {
-  try {
-    await signOut(auth);
-    console.log("User signed out");
-    return { success: true };
-  } catch (error) {
-    console.error("Error signing out:", error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Update user profile
-export const updateUserProfile = async (userId, updates) => {
-  try {
-    const userRef = doc(db, "users", userId);
-    await updateDoc(userRef, {
-      ...updates,
-      updatedAt: new Date(),
-    });
-    console.log("Profile updated successfully");
-    return { success: true };
-  } catch (error) {
-    console.error("Error updating profile:", error);
     return { success: false, error: error.message };
   }
 };
@@ -194,18 +103,17 @@ export const updateUserProfile = async (userId, updates) => {
 export async function createRideRequest(rideData) {
   try {
     const completeRideData = {
-      // Customer details
       customerName: rideData.customerName,
       passengerName: rideData.customerName,
       customerPhone: rideData.customerPhone,
+      customerEmail: rideData.customerEmail || null,
+      customerId: rideData.customerId || null,
 
-      // Location details
       pickupAddress: rideData.pickupAddress,
       pickupLocation: rideData.pickupAddress,
       destinationAddress: rideData.destinationAddress,
       destination: rideData.destinationAddress,
 
-      // Coordinate data
       pickupCoords: rideData.pickupCoords,
       destinationCoords: rideData.destinationCoords,
       pickup: {
@@ -219,75 +127,102 @@ export async function createRideRequest(rideData) {
         address: rideData.destinationAddress,
       },
 
-      // Price and trip details
       estimatedPrice: rideData.estimatedPrice,
       estimatedFare: rideData.estimatedPrice,
       fare: rideData.estimatedPrice,
       distance: rideData.distance,
       estimatedTime: rideData.estimatedTime,
 
-      // Customer rating
       passengerRating: 5.0,
-
-      // Status and timing
       status: "pending",
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
 
-      // Scheduled ride support
       isScheduled: rideData.isScheduled || false,
       scheduledDateTime: rideData.scheduledDateTime || null,
-
-      // Payment method
       paymentMethod: rideData.paymentMethod || null,
+      isGuest: rideData.isGuest || false,
     };
 
     const docRef = await addDoc(collection(db, "rides"), completeRideData);
-    console.log("Ride request created with ID:", docRef.id);
+    console.log("✅ Ride created with ID:", docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error("Error creating ride request:", error);
+    console.error("❌ Error creating ride:", error);
     throw error;
   }
 }
 
-// Listen for ride status updates
+// Subscribe to ride updates - REAL-TIME
 export function subscribeToRideUpdates(rideId, callback) {
+  console.log("📡 Subscribing to ride updates:", rideId);
+
   const rideRef = doc(db, "rides", rideId);
-  return onSnapshot(rideRef, (doc) => {
-    if (doc.exists()) {
-      callback({ id: doc.id, ...doc.data() });
+
+  const unsubscribe = onSnapshot(
+    rideRef,
+    (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = { id: docSnapshot.id, ...docSnapshot.data() };
+        console.log("🔄 Ride update received:", data.status);
+        callback(data);
+      } else {
+        console.warn("⚠️ Ride deleted from Firebase:", rideId);
+        callback(null);
+      }
+    },
+    (error) => {
+      console.error("❌ Error in ride subscription:", error);
+      callback(null);
     }
-  });
+  );
+
+  return unsubscribe;
+}
+
+// Get ride details once (for initial load)
+export async function getRideDetails(rideId) {
+  try {
+    console.log("📥 Fetching ride details:", rideId);
+    const rideRef = doc(db, "rides", rideId);
+    const rideDoc = await getDoc(rideRef);
+
+    if (rideDoc.exists()) {
+      const data = { id: rideDoc.id, ...rideDoc.data() };
+      console.log("✅ Ride details fetched:", data.status);
+      return data;
+    }
+    console.warn("⚠️ Ride not found:", rideId);
+    return null;
+  } catch (error) {
+    console.error("❌ Error getting ride details:", error);
+    throw error;
+  }
 }
 
 // Update ride status
 export async function updateRideStatus(rideId, status, additionalData = {}) {
   try {
+    console.log("📝 Updating ride status:", rideId, "->", status);
     const rideRef = doc(db, "rides", rideId);
     await updateDoc(rideRef, {
       status,
-      updatedAt: new Date(),
+      updatedAt: serverTimestamp(),
       ...additionalData,
     });
+    console.log("✅ Ride status updated successfully");
   } catch (error) {
-    console.error("Error updating ride status:", error);
+    console.error("❌ Error updating ride status:", error);
     throw error;
   }
 }
-
-// Get ride details
-export async function getRideDetails(rideId) {
+export const signOutUser = async () => {
   try {
-    const rideRef = doc(db, "rides", rideId);
-    const rideDoc = await getDoc(rideRef);
-
-    if (rideDoc.exists()) {
-      return { id: rideDoc.id, ...rideDoc.data() };
-    }
-    return null;
+    await signOut(auth);
+    console.log("✅ User signed out successfully");
+    return { success: true };
   } catch (error) {
-    console.error("Error getting ride details:", error);
-    throw error;
+    console.error("❌ Error signing out:", error);
+    return { success: false, error: error.message };
   }
-}
+};

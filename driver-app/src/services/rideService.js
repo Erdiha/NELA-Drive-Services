@@ -28,11 +28,20 @@ export function subscribeToNewRides(callback) {
   return onSnapshot(q, (snapshot) => {
     const rides = [];
     snapshot.forEach((doc) => {
-      const rideData = { id: doc.id, ...doc.data() };
-      rides.push(rideData);
+      const data = doc.data();
+      rides.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+        acceptedAt:
+          data.acceptedAt?.toDate?.()?.toISOString() || data.acceptedAt,
+        scheduledDateTime:
+          data.scheduledDateTime?.toDate?.()?.toISOString() ||
+          data.scheduledDateTime,
+      });
     });
 
-    // Send notification for new rides if driver is online
     rides.forEach((ride) => {
       NotificationService.sendNewRideNotification(ride);
     });
@@ -52,12 +61,23 @@ export function subscribeToActiveRides(driverId, callback) {
   return onSnapshot(q, (snapshot) => {
     const rides = [];
     snapshot.forEach((doc) => {
-      rides.push({ id: doc.id, ...doc.data() });
+      const data = doc.data();
+      // Convert Timestamps to strings immediately
+      rides.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+        acceptedAt:
+          data.acceptedAt?.toDate?.()?.toISOString() || data.acceptedAt,
+        scheduledDateTime:
+          data.scheduledDateTime?.toDate?.()?.toISOString() ||
+          data.scheduledDateTime,
+      });
     });
     callback(rides);
   });
 }
-
 export async function updateRideStatus(rideId, status, additionalData = {}) {
   try {
     const rideRef = doc(db, "rides", rideId);

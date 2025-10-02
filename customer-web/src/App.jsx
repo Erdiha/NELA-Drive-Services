@@ -6,6 +6,7 @@ import {
   createRideRequest,
   onAuthStateChange,
   subscribeToRideUpdates,
+  getRideDetails,
 } from "./services/firebaseService";
 import ScheduleCalendar from "./components/ScheduleCalender";
 import RideStatusTracker from "./components/RideStatusTracker";
@@ -14,6 +15,7 @@ import AccountSystem from "./components/AccountSystem";
 import RideTrackingMap from "./components/RideTrackingMap";
 import AccountDashboard from "./components/AccountDashboard";
 import { sendSMS, SMS_TEMPLATES } from "./services/smsServices";
+import RideTrackingPage from "./components/RideTrackingPage";
 
 const GuestAccountPrompt = ({
   customerDetails,
@@ -219,23 +221,148 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // REPLACE the entire section after "useEffect(() => {" for ride updates (around line 195)
+
   useEffect(() => {
-    if (rideId) {
-      const unsubscribe = subscribeToRideUpdates(rideId, (updatedRide) => {
-        console.log("Ride status update:", updatedRide);
-        setRideData(updatedRide);
-        setCurrentRideStatus(updatedRide.status);
-        if (updatedRide.status === "accepted" && showFindingDriver) {
-          setShowFindingDriver(false);
+    if (!rideId) return;
+
+    console.log("📡 Setting up ride subscription for:", rideId);
+
+    if (!rideData) {
+      getRideDetails(rideId).then((data) => {
+        if (!data) {
+          console.log("❌ Ride not found, clearing state");
+          setRideId(null);
+          setRideData(null);
+          clearBookingFromURL();
+          setCurrentPage("home");
+          return;
+        }
+
+        setRideData(data);
+        setCurrentRideStatus(data.status);
+
+        if (data.pickupAddress && !pickupAddress) {
+          setPickupAddress({
+            address: data.pickupAddress,
+            lat: data.pickupCoords?.lat || data.pickup?.latitude,
+            lng: data.pickupCoords?.lng || data.pickup?.longitude,
+          });
+        }
+        if (data.destinationAddress && !destinationAddress) {
+          setDestinationAddress({
+            address: data.destinationAddress,
+            lat: data.destinationCoords?.lat || data.dropoff?.latitude,
+            lng: data.destinationCoords?.lng || data.dropoff?.longitude,
+          });
+        }
+        if (data.estimatedPrice && !priceEstimate) {
+          setPriceEstimate({
+            finalPrice: data.estimatedPrice,
+            distance: parseFloat(data.distance),
+            estimatedTime: parseInt(data.estimatedTime),
+          });
         }
       });
-      return () => unsubscribe();
     }
-  }, [rideId, showFindingDriver]);
 
-  // NEW: Restore booking progress from URL on mount
+    const unsubscribe = subscribeToRideUpdates(rideId, (updatedRide) => {
+      if (!updatedRide) {
+        console.log("❌ Ride deleted or error, clearing state");
+        setRideId(null);
+        setRideData(null);
+        setPickupAddress(null);
+        setDestinationAddress(null);
+        setPriceEstimate(null);
+        clearBookingFromURL();
+        setCurrentPage("home");
+        alert("This ride is no longer available");
+        return;
+      }
+
+      console.log("🔄 Ride update:", updatedRide.status);
+      setRideData(updatedRide);
+      setCurrentRideStatus(updatedRide.status);
+
+      if (updatedRide.status === "accepted" && showFindingDriver) {
+        setShowFindingDriver(false);
+      }
+    });
+
+    return () => {
+      console.log("🔌 Unsubscribing from ride:", rideId);
+      unsubscribe();
+    };
+  }, [rideId]);
+  // NEW: Load ride from URL tracking link
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith("/track/")) {
+      const trackingRideId = path.replace("/track/", "");
+      console.log("📍 Loading ride from tracking URL:", trackingRideId);
+      setRideId(trackingRideId);
+      setCurrentPage("tracking");
+    }
+  }, []);
   useEffect(() => {
     const restored = restoreBookingFromURL();
+
+    if (restored.rideId) {
+      setRideId(restored.rideId);
+      setCurrentPage("tracking");
+    }
+
+    if (restored.pickupAddress) setPickupAddress(restored.pickupAddress);
+    if (restored.destinationAddress)
+      setDestinationAddress(restored.destinationAddress);
+    if (restored.priceEstimate) setPriceEstimate(restored.priceEstimate);
+    if (restored.customerDetails) setCustomerDetails(restored.customerDetails);
+    if (restored.isScheduled !== undefined)
+      setIsScheduled(restored.isScheduled);
+    if (restored.scheduledDateTime)
+      setScheduledDateTime(restored.scheduledDateTime);
+    if (restored.selectedPaymentMethod)
+      setSelectedPaymentMethod(restored.selectedPaymentMethod);
+  }, []);
+
+  // Save booking progress AND active ride to URL
+  useEffect(() => {
+    if (currentPage === "tracking" && rideId) {
+      saveBookingToURL({ rideId });
+    } else if (
+      currentPage === "home" &&
+      priceEstimate &&
+      pickupAddress &&
+      destinationAddress
+    ) {
+      saveBookingToURL({
+        pickupAddress,
+        destinationAddress,
+        priceEstimate,
+        customerDetails,
+        isScheduled,
+        scheduledDateTime,
+        selectedPaymentMethod,
+      });
+    } else {
+      clearBookingFromURL();
+    }
+  }, [rideId, pickupAddress, destinationAddress, priceEstimate, currentPage]);
+  useEffect(() => {
+    const restored = restoreBookingFromURL();
+
+    if (restored.rideId) {
+      // Verify ride exists in Firebase before restoring
+      getRideDetails(restored.rideId).then((ride) => {
+        if (ride) {
+          setRideId(restored.rideId);
+          setCurrentPage("tracking");
+        } else {
+          console.log("Ride in URL doesn't exist, clearing");
+          clearBookingFromURL();
+        }
+      });
+    }
 
     if (restored.pickupAddress) setPickupAddress(restored.pickupAddress);
     if (restored.destinationAddress)
@@ -605,150 +732,40 @@ function App() {
       </div>
     );
   }
-
   if (currentPage === "tracking") {
     if (!rideId) {
       return (
         <div className="min-h-screen bg-light">
           <NavigationHeader />
           <div className="pt-24 px-4 min-h-screen flex items-center justify-center">
-            <div className="w-full max-w-md text-center">
-              <div className="card-glass p-8">
-                <div className="w-20 h-20 bg-neutral-200 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                  <svg
-                    className="w-10 h-10 text-neutral-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m0 0L9 7"
-                    />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-neutral-800 mb-4">
-                  No Active Rides
-                </h2>
-                <p className="text-neutral-600 mb-8">
-                  Book a ride to track it here
-                </p>
-                <button
-                  onClick={() => setCurrentPage("home")}
-                  className="btn-primary w-full"
-                >
-                  Book a Ride
-                </button>
-              </div>
+            <div className="w-full max-w-md text-center card-glass p-8">
+              <div className="text-4xl mb-4">🚗</div>
+              <h2 className="text-2xl font-bold mb-4">No Active Rides</h2>
+              <p className="text-gray-600 mb-6">Book a ride to track it here</p>
+              <button
+                onClick={() => setCurrentPage("home")}
+                className="btn-primary w-full"
+              >
+                Book a Ride
+              </button>
             </div>
           </div>
         </div>
       );
     }
-
-    const statusDisplay = getRideStatusDisplay();
-
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-cyan-50">
-        <NavigationHeader />
-        <FindingDriverModal />
-        <div className="pt-24 px-4">
-          <div className="max-w-md mx-auto">
-            <div className="card-glass p-8">
-              <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-r from-success to-accent rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                  <svg
-                    className="w-10 h-10 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-success to-accent bg-clip-text text-transparent mb-2">
-                  {statusDisplay?.title || "Processing..."}
-                </h2>
-                <p className="text-neutral-600">
-                  {statusDisplay?.message || "Please wait..."}
-                </p>
-                <div className="mt-4 px-4 py-2 bg-neutral-100 rounded-full inline-block">
-                  <p className="text-sm text-neutral-600">
-                    ID: {rideId.substring(0, 8)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4 mb-8">
-                <div className="bg-gradient-to-r from-neutral-50 to-neutral-100 rounded-2xl p-4">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-3 h-3 bg-success rounded-full"></div>
-                    <span className="text-sm font-medium text-neutral-700">
-                      Pickup
-                    </span>
-                  </div>
-                  <p className="text-neutral-900 ml-6">
-                    {pickupAddress?.address}
-                  </p>
-                </div>
-
-                <div className="bg-gradient-to-r from-neutral-50 to-neutral-100 rounded-2xl p-4">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-3 h-3 bg-danger rounded-sm"></div>
-                    <span className="text-sm font-medium text-neutral-700">
-                      Destination
-                    </span>
-                  </div>
-                  <p className="text-neutral-900 ml-6">
-                    {destinationAddress?.address}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-8">
-                <RideTrackingMap
-                  ride={{
-                    pickup: {
-                      latitude: pickupAddress?.lat,
-                      longitude: pickupAddress?.lng,
-                    },
-                    dropoff: {
-                      latitude: destinationAddress?.lat,
-                      longitude: destinationAddress?.lng,
-                    },
-                    distance: priceEstimate?.distance + " miles",
-                    estimatedTime: priceEstimate?.estimatedTime + " min",
-                    pickupAddress: pickupAddress?.address,
-                    destinationAddress: destinationAddress?.address,
-                  }}
-                  driverLocation={{ lat: 40.73, lng: -74.01 }}
-                />
-              </div>
-
-              <button onClick={resetBookingFlow} className="btn-primary w-full">
-                Book Another Ride
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {showRideTracker && (
-          <RideStatusTracker
-            rideId={rideId}
-            onClose={() => setShowRideTracker(false)}
-          />
-        )}
-      </div>
+      <RideTrackingPage
+        rideData={rideData}
+        pickupAddress={pickupAddress}
+        destinationAddress={destinationAddress}
+        priceEstimate={priceEstimate}
+        rideId={rideId}
+        onBookAnother={resetBookingFlow}
+        isScheduled={isScheduled}
+        scheduledDateTime={scheduledDateTime}
+      />
     );
   }
-
   return (
     <div className="min-h-screen bg-light">
       <NavigationHeader />

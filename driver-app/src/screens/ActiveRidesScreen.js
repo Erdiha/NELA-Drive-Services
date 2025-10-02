@@ -24,8 +24,12 @@ const RideStatusCard = ({
   onViewDetails,
   driverLocation,
 }) => {
+  if (!ride || !ride.id) {
+    return null;
+  }
   const [liveETA, setLiveETA] = useState(null);
   const [liveDistance, setLiveDistance] = useState(null);
+  console.log("Ride data:", JSON.stringify(ride, null, 2));
 
   // Check if ride is scheduled for future
   const isScheduled =
@@ -119,7 +123,7 @@ const RideStatusCard = ({
       {isScheduled ? (
         <View style={styles.scheduledBadge}>
           <Text style={styles.scheduledBadgeText}>
-            📅 Scheduled for{" "}
+            Scheduled for{" "}
             {scheduledTime.toLocaleString("en-US", {
               month: "short",
               day: "numeric",
@@ -141,18 +145,15 @@ const RideStatusCard = ({
         </View>
       )}
 
-      {/* Live Stats - Prominent (only for active, not scheduled) */}
       {!isScheduled &&
         (ride.status === "accepted" || ride.status === "in_progress") &&
         liveETA && (
           <View style={styles.liveStatsRow}>
             <View style={styles.liveStatMini}>
-              <Text style={styles.liveStatIcon}>📍</Text>
-              <Text style={styles.liveStatText}>{liveDistance} mi</Text>
+              <Text style={styles.liveStatText}>{String(liveDistance)} mi</Text>
             </View>
             <View style={styles.liveStatMini}>
-              <Text style={styles.liveStatIcon}>⏱️</Text>
-              <Text style={styles.liveStatText}>{liveETA} min</Text>
+              <Text style={styles.liveStatText}>{String(liveETA)} min</Text>
             </View>
           </View>
         )}
@@ -170,12 +171,13 @@ const RideStatusCard = ({
               {ride.passengerName || "Anonymous"}
             </Text>
             <View style={styles.ratingRow}>
-              <Text style={styles.star}>⭐</Text>
               <Text style={styles.rating}>{ride.passengerRating || 5.0}</Text>
             </View>
           </View>
         </View>
-        <Text style={styles.fare}>${ride.estimatedFare || ride.fare}</Text>
+        <Text style={styles.fare}>
+          ${String(ride.estimatedFare || ride.fare || "0")}
+        </Text>{" "}
       </View>
 
       {/* Route - Compact */}
@@ -183,14 +185,14 @@ const RideStatusCard = ({
         <View style={styles.routeRow}>
           <View style={styles.pickupDot} />
           <Text style={styles.routeText} numberOfLines={1}>
-            {ride.pickupLocation || ride.pickup?.address}
+            {ride.pickupLocation || ride.pickup?.address || "Pickup location"}
           </Text>
         </View>
         <View style={styles.routeLine} />
         <View style={styles.routeRow}>
           <View style={styles.destinationDot} />
           <Text style={styles.routeText} numberOfLines={1}>
-            {ride.destination || ride.dropoff?.address}
+            {ride.destination || ride.dropoff?.address || "Destination"}
           </Text>
         </View>
       </View>
@@ -317,7 +319,6 @@ export default function ActiveRidesScreen({ navigation }) {
   if (activeRides.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>🚗</Text>
         <Text style={styles.emptyTitle}>No Active Rides</Text>
         <Text style={styles.emptySubtext}>
           Accept a ride request to see it here
@@ -419,12 +420,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#f0fdf4",
     padding: 12,
-    justifyContent: "center",
-    gap: 24,
+    justifyContent: "space-around",
   },
   liveStatMini: {
     flexDirection: "row",
     alignItems: "center",
+    marginHorizontal: 12,
   },
   liveStatIcon: {
     fontSize: 16,

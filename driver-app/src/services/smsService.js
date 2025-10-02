@@ -3,22 +3,22 @@ import { Alert } from "react-native";
 // SMS Templates
 export const SMS_TEMPLATES = {
   rideAccepted: (driverName, vehicleInfo, eta) =>
-    `🚗 Your NELA ride has been accepted! ${driverName} is on the way in a ${vehicleInfo}. ETA: ${eta} min.`,
+    `Your NELA ride has been accepted! ${driverName} is on the way in a ${vehicleInfo}. ETA: ${eta} min.`,
 
   driverOnWay: (driverName, eta) =>
-    `🛣️ ${driverName} is heading to your pickup location. ETA: ${eta} min.`,
+    `${driverName} is heading to your pickup location. ETA: ${eta} min.`,
 
   driverArrived: (driverName, vehicleInfo) =>
-    `📍 ${driverName} has arrived! Look for the ${vehicleInfo}.`,
+    `${driverName} has arrived! Look for the ${vehicleInfo}.`,
 
   tripStarted: (driverName, destination) =>
-    `🚀 Trip started! ${driverName} is taking you to ${destination}. Have a safe ride!`,
+    `Trip started! ${driverName} is taking you to ${destination}. Have a safe ride!`,
 
   tripCompleted: (driverName, fare) =>
-    `✅ Trip completed! Thank you for riding with NELA. Fare: $${fare}. Rate your experience!`,
+    `Trip completed! Thank you for riding with NELA. Fare: $${fare}. Rate your experience!`,
 
   tripCancelled: (reason) =>
-    `❌ Your ride has been cancelled. ${
+    `Your ride has been cancelled. ${
       reason || "We apologize for the inconvenience."
     } Book another ride anytime!`,
 };
