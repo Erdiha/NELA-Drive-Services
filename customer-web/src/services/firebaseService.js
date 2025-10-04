@@ -20,6 +20,28 @@ import {
 
 export const auth = getAuth();
 
+// ✅ NEW: Smart timeout calculation
+function calculateTimeoutMinutes(isScheduled, scheduledDateTime) {
+  if (!isScheduled) {
+    return 5; // Immediate rides: 5 min
+  }
+
+  const now = new Date();
+  const rideTime = new Date(scheduledDateTime);
+  const hoursUntil = (rideTime - now) / (1000 * 60 * 60);
+
+  if (hoursUntil < 0) {
+    // Time already passed (edge case)
+    return 5;
+  } else if (hoursUntil < 1) {
+    return 5; // <1 hour: treat like immediate
+  } else if (hoursUntil < 6) {
+    return 15; // 1-6 hours: moderate time
+  } else {
+    return 30; // 6+ hours: plenty of time
+  }
+}
+
 export const updateUserProfile = async (userId, updates) => {
   try {
     const userRef = doc(db, "users", userId);
@@ -102,6 +124,13 @@ export const signInUser = async (email, password) => {
 // Create a new ride request
 export async function createRideRequest(rideData) {
   try {
+    // ✅ Calculate smart timeout
+    const timeoutMinutes = calculateTimeoutMinutes(
+      rideData.isScheduled,
+      rideData.scheduledDateTime
+    );
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+
     const completeRideData = {
       customerName: rideData.customerName,
       passengerName: rideData.customerName,
@@ -142,10 +171,15 @@ export async function createRideRequest(rideData) {
       scheduledDateTime: rideData.scheduledDateTime || null,
       paymentMethod: rideData.paymentMethod || null,
       isGuest: rideData.isGuest || false,
+
+      // ✅ NEW: Timeout fields
+      pendingTimeoutMinutes: timeoutMinutes,
+      timeoutAt: new Date(Date.now() + timeoutMs),
     };
 
     const docRef = await addDoc(collection(db, "rides"), completeRideData);
     console.log("✅ Ride created with ID:", docRef.id);
+    console.log(`⏱️ Timeout: ${timeoutMinutes} minutes`);
     return docRef.id;
   } catch (error) {
     console.error("❌ Error creating ride:", error);
@@ -155,7 +189,7 @@ export async function createRideRequest(rideData) {
 
 // Subscribe to ride updates - REAL-TIME
 export function subscribeToRideUpdates(rideId, callback) {
-  console.log("📡 Subscribing to ride updates:", rideId);
+  console.log("🔔 Subscribing to ride updates:", rideId);
 
   const rideRef = doc(db, "rides", rideId);
 
@@ -183,7 +217,7 @@ export function subscribeToRideUpdates(rideId, callback) {
 // Get ride details once (for initial load)
 export async function getRideDetails(rideId) {
   try {
-    console.log("📥 Fetching ride details:", rideId);
+    console.log("🔥 Fetching ride details:", rideId);
     const rideRef = doc(db, "rides", rideId);
     const rideDoc = await getDoc(rideRef);
 
@@ -200,7 +234,7 @@ export async function getRideDetails(rideId) {
   }
 }
 
-// Update ride status
+// ✅ Update ride status
 export async function updateRideStatus(rideId, status, additionalData = {}) {
   try {
     console.log("📝 Updating ride status:", rideId, "->", status);
@@ -216,6 +250,7 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
     throw error;
   }
 }
+
 export const signOutUser = async () => {
   try {
     await signOut(auth);

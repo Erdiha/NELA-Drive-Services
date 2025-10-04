@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
-import React, { useState, useEffect } from "react";
-// import FavoriteLocations from "./FavoriteLocations";
+import React, { useState, useEffect, useRef } from "react";
+import { isPointInServiceArea } from "../data/serviceAreas";
+import QuickLocationPicker from "./QuickLocationPicker";
 
 function AddressInput({
   placeholder,
@@ -18,34 +19,76 @@ function AddressInput({
   const [locationError, setLocationError] = useState(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  const [showQuickPick, setShowQuickPick] = useState(false);
+  const abortControllerRef = useRef(null);
+  const [isSelectingFromSuggestion, setIsSelectingFromSuggestion] =
+    useState(false);
+  const justSelectedRef = useRef(false);
 
   useEffect(() => {
+    console.log(
+      "⚡ useEffect triggered, query:",
+      query,
+      "length:",
+      query.length
+    );
+
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
+
     if (query.length > 3) {
       setIsLoading(true);
       const timer = setTimeout(() => {
         searchAddresses(query);
       }, 500);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      };
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
       setIsLoading(false);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     }
   }, [query]);
 
   const searchAddresses = async (searchQuery) => {
+    console.log("🔍 SEARCHING FOR:", searchQuery);
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController();
+
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           searchQuery
-        )}&limit=5&countrycodes=us`
+        )}&limit=5&countrycodes=us`,
+        {
+          signal: abortControllerRef.current.signal,
+        }
       );
       const data = await response.json();
+
       setSuggestions(data);
       setShowSuggestions(true);
       setIsLoading(false);
     } catch (error) {
+      if (error.name === "AbortError") {
+        console.log("Request cancelled");
+        return;
+      }
       console.error("Error searching addresses:", error);
       setIsLoading(false);
     }
@@ -71,6 +114,7 @@ function AddressInput({
           const data = await response.json();
 
           if (data && data.display_name) {
+            justSelectedRef.current = true;
             setQuery(data.display_name);
             onAddressSelect({
               address: data.display_name,
@@ -114,15 +158,28 @@ function AddressInput({
   };
 
   const handleSelectAddress = (place) => {
+    const lat = parseFloat(place.lat);
+    const lng = parseFloat(place.lon);
+
+    if (isPickup && !isPointInServiceArea(lat, lng)) {
+      alert(
+        "Sorry, we only pick up from: Eagle Rock, Glendale, Highland Park, Cypress Park, Mount Washington, Glassell Park, and major LA airports (LAX, Burbank, Long Beach)."
+      );
+      return;
+    }
+
+    console.log("✅ SELECTED:", place.display_name);
+
+    justSelectedRef.current = true; // Set flag
     setQuery(place.display_name);
     setSuggestions([]);
     setShowSuggestions(false);
-    setShowFavorites(false);
+    setIsLoading(false);
 
     onAddressSelect({
       address: place.display_name,
-      lat: parseFloat(place.lat),
-      lng: parseFloat(place.lon),
+      lat: lat,
+      lng: lng,
     });
   };
 
@@ -162,10 +219,37 @@ function AddressInput({
 
   return (
     <div className="relative">
+      {/* Quick Pick Button */}
+      <div className="mb-2">
+        <button
+          onClick={() => setShowQuickPick(true)}
+          className="w-full px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-2xl hover:border-blue-400 transition-all text-left flex items-center justify-between group"
+          type="button"
+        >
+          <span className="text-sm font-semibold text-blue-700">
+            Quick Pick - Airports & Landmarks
+          </span>
+          <svg
+            className="w-5 h-5 text-blue-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </button>
+      </div>
+
+      {/* Input Container */}
       <div className="relative group">
         {/* Icon */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200">
-          {icon}
+        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200">
+          <span className="text-lg">{icon}</span>
         </div>
 
         {/* Input Field */}
@@ -176,40 +260,14 @@ function AddressInput({
           onChange={(e) => setQuery(e.target.value)}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
-          className="w-full pl-12 pr-24 py-4 bg-gray-50 border-2 border-gray-200 rounded-2xl 
+          className="w-full pl-12 pr-24 sm:pr-28 py-4 bg-gray-50 border-2 border-gray-200 rounded-2xl 
                      focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 
                      transition-all duration-200 text-gray-800 placeholder-gray-500 
-                     tmd:ext-lg outline-none hover:border-gray-300 text-sm"
+                     text-sm outline-none hover:border-gray-300"
         />
 
         {/* Right side buttons */}
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {/* Favorites button */}
-          <button
-            onClick={toggleFavorites}
-            className={`p-2 rounded-full transition-all duration-200 ${
-              showFavorites
-                ? "text-blue-600 bg-blue-100"
-                : "text-gray-400 hover:text-blue-600 hover:bg-blue-50"
-            }`}
-            type="button"
-            title="Favorite locations"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-              />
-            </svg>
-          </button>
-
           {/* Clear button */}
           {query && (
             <button
@@ -233,12 +291,12 @@ function AddressInput({
             </button>
           )}
 
-          {/* Current location button */}
+          {/* Current location button - hide on mobile */}
           {showCurrentLocation && (
             <button
               onClick={getCurrentLocation}
               disabled={isGettingLocation}
-              className="p-2 text-blue-500 hover:text-blue-600 rounded-full hover:bg-blue-50 transition-all duration-200 disabled:opacity-50"
+              className="p-2 text-blue-500 hover:text-blue-600 rounded-full hover:bg-blue-50 transition-all duration-200 disabled:opacity-50 hidden sm:block"
               type="button"
               title="Use current location"
             >
@@ -299,28 +357,20 @@ function AddressInput({
         </div>
       )}
 
-      {/* Favorites Panel */}
-      {/* {showFavorites && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 p-4 max-h-96 overflow-y-auto">
-          <FavoriteLocations
-            onSelectLocation={handleFavoriteSelect}
-            currentUser={currentUser}
-            isPickup={isPickup}
-          />
-        </div>
-      )} */}
-
+      {/* Suggestions Dropdown */}
       {/* Suggestions Dropdown */}
       {showSuggestions && suggestions.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden">
           {suggestions.map((place, index) => (
             <div
-              key={index}
+              key={`${place.place_id}-${index}`}
               className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150"
-              onMouseDown={() => handleSelectAddress(place)}
+              onMouseDown={(e) => {
+                e.preventDefault(); // CRITICAL: Prevent input blur/focus events
+                handleSelectAddress(place);
+              }}
             >
               <div className="flex items-center">
-                <div className="text-gray-400 mr-3">📍</div>
                 <div className="text-gray-700 text-sm leading-relaxed">
                   {place.display_name}
                 </div>
@@ -342,7 +392,7 @@ function AddressInput({
               {isGettingLocation ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
-                  <span className="text-blue-700 font-medium">
+                  <span className="text-blue-700 font-medium text-sm">
                     Getting location...
                   </span>
                 </>
@@ -367,7 +417,7 @@ function AddressInput({
                       d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                     />
                   </svg>
-                  <span className="text-blue-700 font-medium">
+                  <span className="text-blue-700 font-medium text-sm">
                     Use Current Location
                   </span>
                 </>
@@ -375,6 +425,20 @@ function AddressInput({
             </div>
           </button>
         </div>
+      )}
+
+      {/* Quick Pick Modal */}
+      {showQuickPick && (
+        <QuickLocationPicker
+          onSelectLocation={(location) => {
+            justSelectedRef.current = true; // ADD THIS
+            setQuery(location.address);
+            onAddressSelect(location);
+            setShowQuickPick(false);
+          }}
+          onClose={() => setShowQuickPick(false)}
+          isPickup={isPickup}
+        />
       )}
     </div>
   );
