@@ -18,6 +18,7 @@ import {
   addCompletedRide,
 } from "../store/store";
 import LocationService from "../services/locationService";
+import RideMap from "../components/RideMap";
 
 const RideDetailsScreen = ({ route, navigation }) => {
   const { rideId } = route.params;

@@ -202,10 +202,11 @@ export default function DashboardScreen({ navigation }) {
 
   const handleDeclineRide = async (ride) => {
     try {
-      // Update ride status to declined in Firebase
-      await updateRideStatus(ride.id, "declined", {
+      // Update ride status to show no driver available
+      await updateRideStatus(ride.id, "no_driver_available", {
         declinedBy: getCurrentDriverId(),
         declinedAt: new Date(),
+        message: "No drivers available at this time. Please try again.",
       });
 
       // Remove from local state

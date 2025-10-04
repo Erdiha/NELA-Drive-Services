@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { db } from "./firebase";
 import {
   collection,
@@ -10,6 +11,7 @@ import {
   setDoc,
   getDoc,
   Timestamp,
+  deleteDoc,
 } from "firebase/firestore";
 import LocationService from "./locationService";
 import NotificationService from "./notificationService";
@@ -78,9 +80,24 @@ export function subscribeToActiveRides(driverId, callback) {
     callback(rides);
   });
 }
+
+// ✅ FIXED: Update ride status with better error handling
 export async function updateRideStatus(rideId, status, additionalData = {}) {
   try {
+    console.log(`📝 Updating ride ${rideId} to status: ${status}`);
+
     const rideRef = doc(db, "rides", rideId);
+
+    // ✅ First check if document exists
+    const rideDoc = await getDoc(rideRef);
+
+    if (!rideDoc.exists()) {
+      console.warn(`⚠️ Ride ${rideId} does not exist in Firebase`);
+      const error = new Error("Ride not found");
+      error.code = "not-found";
+      throw error;
+    }
+
     const updateData = {
       status,
       updatedAt: Timestamp.now(),
@@ -98,7 +115,19 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
       updateData.completedAt = Timestamp.now();
     }
 
+    // Add cancellation data
+    if (status === "cancelled") {
+      updateData.cancelledAt = Timestamp.now();
+      if (!updateData.cancelledBy) {
+        updateData.cancelledBy = DRIVER_ID;
+      }
+      if (!updateData.cancelReason) {
+        updateData.cancelReason = "Cancelled by driver";
+      }
+    }
+
     await updateDoc(rideRef, updateData);
+    console.log(`✅ Ride ${rideId} updated successfully`);
 
     // Send status update notification
     const statusMessages = {
@@ -106,6 +135,7 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
       arrived: "Driver has arrived at pickup location",
       in_progress: "Trip has started",
       completed: "Trip completed successfully",
+      cancelled: "Your ride has been cancelled",
     };
 
     if (statusMessages[status]) {
@@ -116,10 +146,94 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
       );
     }
 
-    return true;
+    return { success: true };
   } catch (error) {
-    console.error("Error updating ride status:", error);
-    throw error;
+    console.error("❌ Error updating ride status:", error);
+
+    // ✅ Return detailed error info
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+    };
+  }
+}
+
+// ✅ NEW: Function to completely delete a ride
+export async function deleteRide(rideId) {
+  try {
+    console.log(`🗑️ Deleting ride ${rideId}`);
+
+    const rideRef = doc(db, "rides", rideId);
+
+    // Check if exists first
+    const rideDoc = await getDoc(rideRef);
+
+    if (!rideDoc.exists()) {
+      console.warn(`⚠️ Ride ${rideId} already deleted`);
+      return { success: true, alreadyDeleted: true };
+    }
+
+    await deleteDoc(rideRef);
+    console.log(`✅ Ride ${rideId} deleted successfully`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Error deleting ride:", error);
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+    };
+  }
+}
+
+// ✅ IMPROVED: Cancel ride with better error handling
+export async function cancelRide(rideId, reason = "Cancelled by driver") {
+  try {
+    console.log(`🚫 Cancelling ride ${rideId}`);
+
+    const rideRef = doc(db, "rides", rideId);
+    const rideDoc = await getDoc(rideRef);
+
+    if (!rideDoc.exists()) {
+      console.warn(`⚠️ Ride ${rideId} does not exist`);
+      return {
+        success: false,
+        error: "Ride not found",
+        code: "not-found",
+      };
+    }
+
+    // Get ride data for notification
+    const rideData = rideDoc.data();
+
+    // Update status to cancelled
+    const result = await updateRideStatus(rideId, "cancelled", {
+      cancelledBy: DRIVER_ID,
+      cancelledAt: Timestamp.now(),
+      cancelReason: reason,
+    });
+
+    // Send SMS notification to customer if phone available
+    if (rideData.customerPhone) {
+      try {
+        await SMSService.notifyTripCancelled(rideData.customerPhone, reason);
+        console.log("📱 Cancellation SMS sent to customer");
+      } catch (smsError) {
+        console.error("Failed to send cancellation SMS:", smsError);
+        // Don't fail the whole cancellation if SMS fails
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error("❌ Error cancelling ride:", error);
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+    };
   }
 }
 

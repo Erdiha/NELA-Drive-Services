@@ -22,16 +22,16 @@ const RideStatusCard = ({
   onUpdateStatus,
   onCompleteRide,
   onViewDetails,
+  onCancelRide,
   driverLocation,
 }) => {
   if (!ride || !ride.id) {
     return null;
   }
+
   const [liveETA, setLiveETA] = useState(null);
   const [liveDistance, setLiveDistance] = useState(null);
-  console.log("Ride data:", JSON.stringify(ride, null, 2));
 
-  // Check if ride is scheduled for future
   const isScheduled =
     ride.scheduledDateTime && new Date(ride.scheduledDateTime) > new Date();
   const scheduledTime = ride.scheduledDateTime
@@ -112,6 +112,8 @@ const RideStatusCard = ({
   };
 
   const nextAction = getNextAction(ride.status);
+  const statusColor = getStatusColor(ride.status);
+  const statusText = getStatusText(ride.status);
 
   return (
     <TouchableOpacity
@@ -119,46 +121,36 @@ const RideStatusCard = ({
       onPress={() => onViewDetails(ride)}
       activeOpacity={0.7}
     >
-      {/* Scheduled Badge */}
       {isScheduled ? (
         <View style={styles.scheduledBadge}>
           <Text style={styles.scheduledBadgeText}>
-            Scheduled for{" "}
-            {scheduledTime.toLocaleString("en-US", {
+            {`Scheduled for ${scheduledTime.toLocaleString("en-US", {
               month: "short",
               day: "numeric",
               hour: "numeric",
               minute: "2-digit",
-            })}
+            })}`}
           </Text>
         </View>
       ) : (
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getStatusColor(ride.status) },
-          ]}
-        >
-          <Text style={styles.statusBadgeText}>
-            {getStatusText(ride.status)}
-          </Text>
+        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+          <Text style={styles.statusBadgeText}>{statusText}</Text>
         </View>
       )}
 
       {!isScheduled &&
-        (ride.status === "accepted" || ride.status === "in_progress") &&
-        liveETA && (
-          <View style={styles.liveStatsRow}>
-            <View style={styles.liveStatMini}>
-              <Text style={styles.liveStatText}>{String(liveDistance)} mi</Text>
-            </View>
-            <View style={styles.liveStatMini}>
-              <Text style={styles.liveStatText}>{String(liveETA)} min</Text>
-            </View>
+      (ride.status === "accepted" || ride.status === "in_progress") &&
+      liveETA ? (
+        <View style={styles.liveStatsRow}>
+          <View style={styles.liveStatMini}>
+            <Text style={styles.liveStatText}>{`${liveDistance} mi`}</Text>
           </View>
-        )}
+          <View style={styles.liveStatMini}>
+            <Text style={styles.liveStatText}>{`${liveETA} min`}</Text>
+          </View>
+        </View>
+      ) : null}
 
-      {/* Passenger & Fare */}
       <View style={styles.passengerSection}>
         <View style={styles.passengerInfo}>
           <View style={styles.avatar}>
@@ -171,16 +163,18 @@ const RideStatusCard = ({
               {ride.passengerName || "Anonymous"}
             </Text>
             <View style={styles.ratingRow}>
-              <Text style={styles.rating}>{ride.passengerRating || 5.0}</Text>
+              <Text style={styles.ratingStar}>⭐</Text>
+              <Text style={styles.rating}>
+                {ride.passengerRating ? ride.passengerRating.toFixed(1) : "New"}
+              </Text>
             </View>
           </View>
         </View>
         <Text style={styles.fare}>
-          ${String(ride.estimatedFare || ride.fare || "0")}
-        </Text>{" "}
+          {`$${ride.estimatedFare || ride.fare || 0}`}
+        </Text>
       </View>
 
-      {/* Route - Compact */}
       <View style={styles.routeSection}>
         <View style={styles.routeRow}>
           <View style={styles.pickupDot} />
@@ -197,37 +191,52 @@ const RideStatusCard = ({
         </View>
       </View>
 
-      {/* Action Buttons */}
       <View style={styles.actionSection}>
-        {!isScheduled && nextAction && (
+        <View style={styles.actionButtonRow}>
+          {!isScheduled && nextAction ? (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: statusColor, flex: 2 },
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (nextAction.nextStatus === "completed") {
+                  onCompleteRide(ride);
+                } else {
+                  onUpdateStatus(ride.id, nextAction.nextStatus);
+                }
+              }}
+            >
+              <Text style={styles.actionButtonText}>{nextAction.text}</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {/* ✅ ADDED: Cancel button for all active rides */}
           <TouchableOpacity
             style={[
-              styles.actionButton,
-              { backgroundColor: getStatusColor(ride.status) },
+              styles.cancelButton,
+              nextAction ? { flex: 1 } : { flex: 1 },
             ]}
             onPress={(e) => {
               e.stopPropagation();
-              if (nextAction.nextStatus === "completed") {
-                onCompleteRide(ride);
-              } else {
-                onUpdateStatus(ride.id, nextAction.nextStatus);
-              }
+              onCancelRide(ride);
             }}
           >
-            <Text style={styles.actionButtonText}>{nextAction.text}</Text>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
-        )}
-        {isScheduled && (
+        </View>
+
+        {isScheduled ? (
           <View style={styles.scheduledInfo}>
             <Text style={styles.scheduledInfoText}>
-              Pickup time:{" "}
-              {scheduledTime.toLocaleTimeString("en-US", {
+              {`Pickup time: ${scheduledTime.toLocaleTimeString("en-US", {
                 hour: "numeric",
                 minute: "2-digit",
-              })}
+              })}`}
             </Text>
           </View>
-        )}
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -237,23 +246,19 @@ export default function ActiveRidesScreen({ navigation }) {
   const dispatch = useDispatch();
   const { activeRides, driverLocation } = useSelector((state) => state.rides);
 
-  // Sort rides: scheduled rides first (by time), then active rides (by status)
   const sortedRides = [...activeRides].sort((a, b) => {
     const aScheduled =
       a.scheduledDateTime && new Date(a.scheduledDateTime) > new Date();
     const bScheduled =
       b.scheduledDateTime && new Date(b.scheduledDateTime) > new Date();
 
-    // Scheduled rides come first
     if (aScheduled && !bScheduled) return -1;
     if (!aScheduled && bScheduled) return 1;
 
-    // If both scheduled, sort by time
     if (aScheduled && bScheduled) {
       return new Date(a.scheduledDateTime) - new Date(b.scheduledDateTime);
     }
 
-    // Active rides sorted by status priority
     const statusOrder = { in_progress: 1, arrived: 2, accepted: 3 };
     return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
   });
@@ -306,15 +311,85 @@ export default function ActiveRidesScreen({ navigation }) {
     );
   };
 
-  const renderActiveRide = ({ item }) => (
-    <RideStatusCard
-      ride={item}
-      onUpdateStatus={handleUpdateStatus}
-      onCompleteRide={handleCompleteRide}
-      onViewDetails={handleViewDetails}
-      driverLocation={driverLocation}
-    />
-  );
+  // ✅ FIXED: Proper ride cancellation with error handling
+  const handleCancelRide = async (ride) => {
+    Alert.alert(
+      "Cancel Ride?",
+      `Are you sure you want to cancel this ride to ${
+        ride.destination || "destination"
+      }?`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              console.log("🚫 Cancelling ride:", ride.id);
+
+              // ✅ Use the improved updateRideStatus that returns result object
+              const result = await updateRideStatus(ride.id, "cancelled", {
+                cancelledBy: "driver",
+                cancelledAt: new Date(),
+                cancelReason: "Cancelled by driver",
+              });
+
+              // ✅ Always remove from local state
+              dispatch(removeActiveRide(ride.id));
+
+              if (result && result.success === false) {
+                // Handle specific error cases
+                if (result.code === "not-found") {
+                  console.log("⚠️ Ride already deleted");
+                  Alert.alert(
+                    "Ride Removed",
+                    "This ride was already cancelled or deleted."
+                  );
+                } else {
+                  console.log(
+                    "⚠️ Error but ride removed locally:",
+                    result.error
+                  );
+                  Alert.alert(
+                    "Ride Removed",
+                    "Removed from your list. There may have been an issue updating the server."
+                  );
+                }
+              } else {
+                console.log("✅ Ride cancelled successfully");
+                Alert.alert(
+                  "Ride Cancelled",
+                  "The ride has been cancelled and the customer has been notified."
+                );
+              }
+            } catch (error) {
+              console.error("❌ Unexpected error cancelling ride:", error);
+
+              // ✅ CRITICAL: Still remove from local state
+              dispatch(removeActiveRide(ride.id));
+
+              Alert.alert("Ride Removed", "Removed from your active rides.", [
+                { text: "OK" },
+              ]);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderActiveRide = ({ item }) => {
+    return (
+      <RideStatusCard
+        ride={item}
+        onUpdateStatus={handleUpdateStatus}
+        onCompleteRide={handleCompleteRide}
+        onViewDetails={handleViewDetails}
+        onCancelRide={handleCancelRide}
+        driverLocation={driverLocation}
+      />
+    );
+  };
 
   if (activeRides.length === 0) {
     return (
@@ -353,10 +428,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-  },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 20,
@@ -410,6 +481,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
+    marginTop: 8,
   },
   scheduledInfoText: {
     fontSize: 14,
@@ -426,10 +498,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 12,
-  },
-  liveStatIcon: {
-    fontSize: 16,
-    marginRight: 6,
   },
   liveStatText: {
     fontSize: 15,
@@ -475,10 +543,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  star: {
-    fontSize: 12,
-    marginRight: 4,
-  },
   rating: {
     fontSize: 13,
     color: "#6b7280",
@@ -512,6 +576,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#EF4444",
     marginRight: 10,
   },
+  ratingStar: {
+    fontSize: 14,
+    marginRight: 4,
+  },
   routeLine: {
     width: 1,
     height: 12,
@@ -528,6 +596,10 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 8,
   },
+  actionButtonRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
   actionButton: {
     paddingVertical: 12,
     borderRadius: 8,
@@ -537,5 +609,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#dc2626",
   },
 });
