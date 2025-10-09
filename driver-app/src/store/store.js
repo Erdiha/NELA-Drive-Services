@@ -1,20 +1,37 @@
 import { configureStore, createSlice } from "@reduxjs/toolkit";
 
-// Helper function to serialize Firebase data for Redux
+// ✅ FIXED: Helper function to serialize Firebase data for Redux
 const serializeRideData = (rides) => {
-  return rides.map((ride) => ({
-    ...ride,
-    createdAt: ride.createdAt?.toDate?.()?.toISOString() || ride.createdAt,
-    updatedAt: ride.updatedAt?.toDate?.()?.toISOString() || ride.updatedAt,
-    acceptedAt: ride.acceptedAt?.toDate?.()?.toISOString() || ride.acceptedAt,
-    completedAt:
-      ride.completedAt?.toDate?.()?.toISOString() || ride.completedAt,
-    scheduledDateTime:
-      typeof ride.scheduledDateTime === "string"
-        ? ride.scheduledDateTime
-        : ride.scheduledDateTime?.toDate?.()?.toISOString() ||
-          ride.scheduledDateTime,
-  }));
+  if (!Array.isArray(rides)) {
+    rides = [rides];
+  }
+
+  return rides.map((ride) => {
+    // Helper to convert Firestore Timestamp to ISO string
+    const convertTimestamp = (timestamp) => {
+      if (!timestamp) return null;
+      if (typeof timestamp === "string") return timestamp;
+      if (timestamp.toDate) return timestamp.toDate().toISOString();
+      if (timestamp.seconds) {
+        // Firestore Timestamp object with seconds/nanoseconds
+        return new Date(timestamp.seconds * 1000).toISOString();
+      }
+      return timestamp;
+    };
+
+    return {
+      ...ride,
+      createdAt: convertTimestamp(ride.createdAt),
+      updatedAt: convertTimestamp(ride.updatedAt),
+      acceptedAt: convertTimestamp(ride.acceptedAt),
+      completedAt: convertTimestamp(ride.completedAt),
+      scheduledDateTime: convertTimestamp(ride.scheduledDateTime),
+      locationUpdatedAt: convertTimestamp(ride.locationUpdatedAt), // ✅ NEW
+      timeoutAt: convertTimestamp(ride.timeoutAt), // ✅ NEW
+      startedAt: convertTimestamp(ride.startedAt), // ✅ NEW
+      cancelledAt: convertTimestamp(ride.cancelledAt), // ✅ NEW
+    };
+  });
 };
 
 const rideSlice = createSlice({
@@ -98,11 +115,23 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
+        // ✅ Ignore these action types completely
         ignoredActions: [
           "persist/PERSIST",
           "persist/REHYDRATE",
           "rides/setNewRides",
           "rides/setActiveRides",
+          "rides/addActiveRide",
+          "rides/addCompletedRide",
+        ],
+        // ✅ Ignore these paths in state
+        ignoredActionPaths: [
+          "payload.locationUpdatedAt",
+          "payload.timeoutAt",
+          "payload.createdAt",
+          "payload.updatedAt",
+          "payload.acceptedAt",
+          "payload.completedAt",
         ],
         ignoredPaths: ["register", "rides"],
       },

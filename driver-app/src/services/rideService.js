@@ -14,8 +14,9 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import LocationService from "./locationService";
-import NotificationService from "./notificationService";
 import SMSService from "./smsService";
+import NotificationService from "./notificationService";
+import ReceiptService from "./receiptService";
 
 // Driver ID - Using your email as the unique identifier
 const DRIVER_ID = "erdiha@gmail.com";
@@ -81,14 +82,13 @@ export function subscribeToActiveRides(driverId, callback) {
   });
 }
 
-// ✅ FIXED: Update ride status with better error handling
 export async function updateRideStatus(rideId, status, additionalData = {}) {
   try {
     console.log(`📝 Updating ride ${rideId} to status: ${status}`);
 
     const rideRef = doc(db, "rides", rideId);
 
-    // ✅ First check if document exists
+    // First check if document exists
     const rideDoc = await getDoc(rideRef);
 
     if (!rideDoc.exists()) {
@@ -97,6 +97,8 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
       error.code = "not-found";
       throw error;
     }
+
+    const rideData = rideDoc.data();
 
     const updateData = {
       status,
@@ -126,23 +128,58 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
       }
     }
 
+    // Update Firebase
     await updateDoc(rideRef, updateData);
     console.log(`✅ Ride ${rideId} updated successfully`);
 
-    // Send status update notification
-    const statusMessages = {
-      accepted: "Driver has accepted your ride request",
-      arrived: "Driver has arrived at pickup location",
-      in_progress: "Trip has started",
-      completed: "Trip completed successfully",
-      cancelled: "Your ride has been cancelled",
-    };
+    // ✅ NEW: Send notifications based on status change
+    const fullRideData = { ...rideData, ...updateData, id: rideId };
 
-    if (statusMessages[status]) {
-      NotificationService.sendRideUpdateNotification(
-        "Ride Update",
-        statusMessages[status],
-        rideId
+    try {
+      switch (status) {
+        case "accepted":
+          await NotificationService.notifyRideAccepted(
+            fullRideData,
+            additionalData
+          );
+          break;
+
+        case "arrived":
+          await NotificationService.notifyDriverArrived(
+            fullRideData,
+            additionalData
+          );
+          break;
+
+        case "in_progress":
+          await NotificationService.notifyTripStarted(
+            fullRideData,
+            additionalData
+          );
+          break;
+
+        case "completed":
+          // Generate receipt
+          const receipt = ReceiptService.generateReceipt(fullRideData);
+          await NotificationService.notifyTripCompleted(
+            fullRideData,
+            additionalData,
+            receipt
+          );
+
+          // Log receipt for driver reference
+          console.log("📄 Receipt generated:");
+          console.log(ReceiptService.formatReceiptText(receipt));
+          break;
+
+        default:
+          console.log(`ℹ️ No notifications for status: ${status}`);
+      }
+    } catch (notificationError) {
+      // Don't fail the ride update if notifications fail
+      console.error(
+        "⚠️ Notification failed (ride updated successfully):",
+        notificationError
       );
     }
 
@@ -150,7 +187,6 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
   } catch (error) {
     console.error("❌ Error updating ride status:", error);
 
-    // ✅ Return detailed error info
     return {
       success: false,
       error: error.message,

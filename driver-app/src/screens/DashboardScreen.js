@@ -26,6 +26,8 @@ import {
 import RideRequestCard from "../components/RideRequestsCard";
 import LocationService from "../services/locationService";
 import NotificationService from "../services/notificationService";
+import EmailService from "../services/emailService";
+import { Linking } from "react-native";
 // import FirebaseTestComponent from "../components/FirebaseTestComponent";
 
 export default function DashboardScreen({ navigation }) {
@@ -130,14 +132,10 @@ export default function DashboardScreen({ navigation }) {
 
   const handleAcceptRide = async (ride) => {
     try {
-      // Get driver profile from AsyncStorage
       const savedProfile = await AsyncStorage.getItem("driverProfile");
       const driverProfile = savedProfile ? JSON.parse(savedProfile) : null;
-
-      // Get current location
       const currentLocation = await LocationService.getCurrentLocation();
 
-      // Prepare comprehensive driver info
       const driverInfo = {
         driverId: getCurrentDriverId(),
         driverName: driverProfile?.name || "Erdi Haciogullari",
@@ -151,7 +149,6 @@ export default function DashboardScreen({ navigation }) {
           color: "White with Black Trim",
           licensePlate: "9LXJ115",
         },
-        // Additional fields that web app might expect
         driver: {
           id: getCurrentDriverId(),
           name: driverProfile?.name || "Erdi Haciogullari",
@@ -170,21 +167,48 @@ export default function DashboardScreen({ navigation }) {
         driverLocation: currentLocation,
       };
 
-      // Update ride status to accepted with full driver info
       await updateRideStatus(ride.id, "accepted", driverInfo);
 
-      // Move ride from new to active
+      // ✅ FIXED EMAIL NOTIFICATION - Don't block on failure
+      if (ride.customerEmail && EmailService.isReady()) {
+        const emailMessage = ride.isScheduled
+          ? `Hi! I'm Erdi, your NELA driver. Your ride is confirmed for ${new Date(
+              ride.scheduledDateTime
+            ).toLocaleString()}. See you then!`
+          : `Hi! I'm Erdi, your NELA driver. I'm on my way to pick you up. ETA: 8 minutes.`;
+
+        // Fire and forget - don't await
+        EmailService.sendRideNotification(
+          ride.customerEmail,
+          "NELA Ride Accepted",
+          emailMessage
+        ).catch((err) => {
+          console.warn("📧 Email failed silently:", err);
+        });
+      } else {
+        console.log("📧 Email skipped (not configured or no customer email)");
+      }
+
+      // SMS PROMPT (this works reliably)
+      const smsMessage = ride.isScheduled
+        ? `Hi! I'm Erdi, your NELA driver. Your ride is confirmed for ${new Date(
+            ride.scheduledDateTime
+          ).toLocaleString()}. See you then!`
+        : `Hi! I'm Erdi, your NELA driver. I'm on my way to pick you up. ETA: 8 minutes.`;
+
+      Linking.openURL(
+        `sms:${ride.customerPhone}?body=${encodeURIComponent(smsMessage)}`
+      );
+
       const updatedActiveRides = [
         ...activeRides,
         { ...ride, status: "accepted", ...driverInfo },
       ];
       dispatch(setActiveRides(updatedActiveRides));
 
-      // Remove from new rides
       const updatedNewRides = newRides.filter((r) => r.id !== ride.id);
       dispatch(setNewRides(updatedNewRides));
 
-      // Send success notification
       NotificationService.sendRideUpdateNotification(
         "Ride Accepted",
         `You accepted a ride to ${ride.destination}`,

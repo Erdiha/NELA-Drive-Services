@@ -279,16 +279,18 @@ const RideDetailsScreen = ({ route, navigation }) => {
   };
 
   const callPassenger = () => {
-    if (ride.passengerPhone) {
-      Linking.openURL(`tel:${ride.passengerPhone}`);
+    const phone = ride.customerPhone || ride.passengerPhone;
+    if (phone) {
+      Linking.openURL(`tel:${phone}`);
     } else {
       Alert.alert("No Phone Number", "Passenger phone number not available");
     }
   };
 
   const sendMessage = () => {
-    if (ride.passengerPhone) {
-      Linking.openURL(`sms:${ride.passengerPhone}`);
+    const phone = ride.customerPhone || ride.passengerPhone;
+    if (phone) {
+      Linking.openURL(`sms:${phone}`);
     } else {
       Alert.alert("No Phone Number", "Passenger phone number not available");
     }
@@ -403,7 +405,24 @@ const RideDetailsScreen = ({ route, navigation }) => {
             {ride.passengerName || "Anonymous"}
           </Text>
         </View>
-
+        {/* Customer Contact Info */}
+        <View style={styles.compactCard}>
+          <Text style={styles.cardTitle}>Contact</Text>
+          <View style={styles.contactRow}>
+            <Text style={styles.contactLabel}>📞 Phone:</Text>
+            <Text style={styles.contactValue}>
+              {ride.customerPhone || ride.passengerPhone || "Not provided"}
+            </Text>
+          </View>
+          {(ride.customerEmail || ride.passengerEmail) && (
+            <View style={styles.contactRow}>
+              <Text style={styles.contactLabel}>📧 Email:</Text>
+              <Text style={styles.contactValue} numberOfLines={1}>
+                {ride.customerEmail || ride.passengerEmail}
+              </Text>
+            </View>
+          )}
+        </View>
         <View style={styles.compactCard}>
           <Text style={styles.cardTitle}>Route</Text>
           <View style={styles.compactLocationRow}>
@@ -690,6 +709,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#1f2937",
+  },
+  contactRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  contactLabel: {
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  contactValue: {
+    fontSize: 13,
+    color: "#1f2937",
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+    marginLeft: 8,
   },
 });
 
