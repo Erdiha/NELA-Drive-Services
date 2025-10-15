@@ -1,245 +1,335 @@
 // services/notificationService.js
-// Complete notification orchestration for all ride stages
+// Email-only notifications - SMS handled by Cloud Function
+// Enterprise-grade with comprehensive error handling
 
-import SMSService from "./smsService";
 import EmailService from "./emailService";
 import ReceiptService from "./receiptService";
 
 class NotificationService {
   constructor() {
     this.isInitialized = true;
+    this.failedNotifications = [];
+    this.retryAttempts = 3;
+    this.retryDelay = 2000;
   }
 
   async initialize() {
-    console.log("📱 Notification Service Ready");
+    console.log("📱 Notification Service initialized (Email-only mode)");
+    console.log("📱 SMS handled by Cloud Function automatically");
     return true;
   }
 
   /**
-   * STAGE 1: RIDE ACCEPTED
-   * Driver accepts the ride - notify customer
+   * Centralized error handler
+   * @private
    */
-  async notifyRideAccepted(rideData, driverData) {
-    console.log("🚀 Notifying customer: Ride Accepted");
+  _handleError(context, error, customerEmail) {
+    const errorLog = {
+      context,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      customerEmail: customerEmail || "N/A",
+    };
 
-    const { customerPhone, customerEmail, isScheduled, scheduledDateTime } =
-      rideData;
-    const driverName =
-      driverData.driverName || driverData.driver?.name || "Your driver";
-    const driverVehicle =
-      driverData.driverVehicle || driverData.driver?.vehicle;
+    console.error(`❌ Notification Error [${context}]:`, errorLog);
+    this.failedNotifications.push(errorLog);
+  }
 
-    // Format vehicle info
-    const vehicleInfo = driverVehicle
-      ? `${driverVehicle.year} ${driverVehicle.color} ${driverVehicle.make} ${driverVehicle.model} (${driverVehicle.licensePlate})`
-      : "your ride";
+  /**
+   * Validate email
+   * @private
+   */
+  _validateEmail(email) {
+    if (!email) {
+      return { valid: false, error: "Email is required" };
+    }
 
-    const eta = isScheduled ? "as scheduled" : "8 minutes";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return { valid: false, error: `Invalid email format: ${email}` };
+    }
 
-    // SMS Notification
-    if (customerPhone) {
+    return { valid: true };
+  }
+
+  /**
+   * Retry logic for failed operations
+   * @private
+   */
+  async _retryOperation(fn, context, maxAttempts = 3) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        await SMSService.notifyRideAccepted(
-          customerPhone,
-          driverName,
-          vehicleInfo,
-          isScheduled ? "Scheduled" : 8
-        );
-        console.log("✅ SMS sent: Ride Accepted");
+        return await fn();
       } catch (error) {
-        console.error("❌ SMS failed:", error.message);
+        lastError = error;
+        console.warn(
+          `⚠️ Retry ${attempt}/${maxAttempts} for ${context}: ${error.message}`
+        );
+
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, this.retryDelay * attempt)
+          );
+        }
       }
     }
 
-    // Email Notification
-    if (customerEmail && EmailService.isReady()) {
-      try {
-        const emailSubject = isScheduled
-          ? "NELA Ride Scheduled ✅"
-          : "Your NELA Driver is On The Way! 🚗";
+    throw lastError;
+  }
 
-        const emailMessage = isScheduled
-          ? `Hi! Your NELA ride has been confirmed.\n\nDriver: ${driverName}\nVehicle: ${vehicleInfo}\nScheduled Time: ${new Date(
-              scheduledDateTime
-            ).toLocaleString()}\n\nYour driver will arrive at the scheduled time. See you then!`
-          : `Hi! Your NELA ride has been accepted.\n\nDriver: ${driverName}\nVehicle: ${vehicleInfo}\nETA: ${eta}\n\nYour driver is on the way to pick you up!`;
+  /**
+   * Safe email sender with validation and retry
+   * @private
+   */
+  async _sendEmail(customerEmail, subject, message, context) {
+    // Validate email
+    const validation = this._validateEmail(customerEmail);
+    if (!validation.valid) {
+      console.warn(`⚠️ ${context}: ${validation.error}`);
+      return { success: false, reason: validation.error, skipped: true };
+    }
 
-        await EmailService.sendRideNotification(
-          customerEmail,
-          emailSubject,
-          emailMessage
-        );
-        console.log("✅ Email sent: Ride Accepted");
-      } catch (error) {
-        console.error("❌ Email failed:", error.message);
+    // Check if EmailService is ready
+    if (!EmailService.isReady()) {
+      console.warn(`⚠️ ${context}: EmailJS not configured - skipping`);
+      return { success: false, reason: "not_configured", skipped: true };
+    }
+
+    // Send with retry logic
+    try {
+      const result = await this._retryOperation(
+        () =>
+          EmailService.sendRideNotification(customerEmail, subject, message),
+        context,
+        this.retryAttempts
+      );
+
+      console.log(`✅ Email sent successfully: ${context}`);
+      return { success: true, result };
+    } catch (error) {
+      this._handleError(context, error, customerEmail);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * STAGE 1: RIDE ACCEPTED
+   * Email: Confirmation with driver details
+   * SMS: Handled by Cloud Function automatically
+   */
+  async notifyRideAccepted(rideData, driverData) {
+    const context = "Ride Accepted";
+    console.log(`📧 ${context} - Email notification`);
+    console.log(`📱 ${context} - SMS will be sent by Cloud Function`);
+
+    try {
+      // Validate required data
+      if (!rideData) {
+        throw new Error("Missing ride data");
       }
+      if (!driverData) {
+        throw new Error("Missing driver data");
+      }
+
+      const {
+        customerEmail,
+        isScheduled,
+        scheduledDateTime,
+        pickupAddress,
+        destinationAddress,
+      } = rideData;
+      const driverName =
+        driverData.driverName || driverData.driver?.name || "Your driver";
+      const driverVehicle =
+        driverData.driverVehicle || driverData.driver?.vehicle;
+
+      // Format vehicle info safely
+      const vehicleInfo = driverVehicle
+        ? `${driverVehicle.year || ""} ${driverVehicle.color || ""} ${
+            driverVehicle.make || ""
+          } ${driverVehicle.model || ""} (${
+            driverVehicle.licensePlate || "N/A"
+          })`.trim()
+        : "your ride";
+
+      // Build email message
+      const emailSubject = isScheduled
+        ? "✅ NELA Ride Scheduled"
+        : "🚗 Your NELA Driver is On The Way!";
+
+      const emailMessage = isScheduled
+        ? `Hi! Your NELA ride has been confirmed.\n\nDriver: ${driverName}\nVehicle: ${vehicleInfo}\nScheduled Time: ${new Date(
+            scheduledDateTime
+          ).toLocaleString()}\n\nPickup: ${pickupAddress}\nDestination: ${destinationAddress}\n\nYour driver will arrive at the scheduled time. See you then!`
+        : `Hi! Your NELA ride has been accepted.\n\nDriver: ${driverName}\nVehicle: ${vehicleInfo}\nETA: 8 minutes\n\nPickup: ${pickupAddress}\nDestination: ${destinationAddress}\n\nYour driver is on the way to pick you up!`;
+
+      await this._sendEmail(customerEmail, emailSubject, emailMessage, context);
+
+      return { success: true, context };
+    } catch (error) {
+      this._handleError(context, error, rideData?.customerEmail);
+      // Don't throw - ride acceptance shouldn't fail due to notification
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * STAGE 2: DRIVER ARRIVED
-   * Driver marks as arrived at pickup
+   * No email needed - customer will see the car
+   * SMS: Handled by Cloud Function automatically
    */
   async notifyDriverArrived(rideData, driverData) {
-    console.log("📍 Notifying customer: Driver Arrived");
+    const context = "Driver Arrived";
+    console.log(`${context} - No email sent (not needed)`);
+    console.log(`📱 ${context} - SMS will be sent by Cloud Function`);
 
-    const { customerPhone, customerEmail } = rideData;
-    const driverName =
-      driverData.driverName || driverData.driver?.name || "Your driver";
-    const driverVehicle =
-      driverData.driverVehicle || driverData.driver?.vehicle;
-
-    const vehicleInfo = driverVehicle
-      ? `${driverVehicle.color} ${driverVehicle.make} ${driverVehicle.model}`
-      : "your ride";
-
-    // SMS Notification
-    if (customerPhone) {
-      try {
-        await SMSService.notifyDriverArrived(
-          customerPhone,
-          driverName,
-          vehicleInfo
-        );
-        console.log("✅ SMS sent: Driver Arrived");
-      } catch (error) {
-        console.error("❌ SMS failed:", error.message);
-      }
-    }
-
-    // Email Notification
-    if (customerEmail && EmailService.isReady()) {
-      try {
-        const emailMessage = `${driverName} has arrived at your pickup location!\n\nLook for: ${vehicleInfo}\nLicense Plate: ${
-          driverData.driverVehicle?.licensePlate || "See app"
-        }\n\nYour driver is waiting for you outside.`;
-
-        await EmailService.sendRideNotification(
-          customerEmail,
-          "Your NELA Driver Has Arrived! 📍",
-          emailMessage
-        );
-        console.log("✅ Email sent: Driver Arrived");
-      } catch (error) {
-        console.error("❌ Email failed:", error.message);
-      }
-    }
+    // No email needed for this stage
+    return { success: true, context, type: "sms-only" };
   }
 
   /**
    * STAGE 3: TRIP STARTED
-   * Driver starts the trip
+   * In-app only - no email or SMS needed
    */
   async notifyTripStarted(rideData, driverData) {
-    console.log("🛣️ Notifying customer: Trip Started");
+    const context = "Trip Started";
+    console.log(`🛣️ ${context} - In-app notification only`);
+    console.log(`   (Customer is in the car, no external notification needed)`);
 
-    const { customerPhone, customerEmail, destination, dropoff } = rideData;
-    const driverName =
-      driverData.driverName || driverData.driver?.name || "Your driver";
-    const destinationAddress =
-      destination || dropoff?.address || "your destination";
-
-    // SMS Notification
-    if (customerPhone) {
-      try {
-        await SMSService.notifyTripStarted(
-          customerPhone,
-          driverName,
-          destinationAddress
-        );
-        console.log("✅ SMS sent: Trip Started");
-      } catch (error) {
-        console.error("❌ SMS failed:", error.message);
-      }
-    }
-
-    // Email Notification
-    if (customerEmail && EmailService.isReady()) {
-      try {
-        const emailMessage = `Your trip has started!\n\n${driverName} is taking you to:\n${destinationAddress}\n\nSit back, relax, and enjoy your ride with NELA!`;
-
-        await EmailService.sendRideNotification(
-          customerEmail,
-          "Trip Started - Enjoy Your Ride! 🚀",
-          emailMessage
-        );
-        console.log("✅ Email sent: Trip Started");
-      } catch (error) {
-        console.error("❌ Email failed:", error.message);
-      }
-    }
+    // No notifications needed - customer is in the car
+    return { success: true, context, type: "in-app-only" };
   }
 
   /**
    * STAGE 4: TRIP COMPLETED
-   * Trip is complete - send receipt
+   * Email: Detailed receipt for records
+   * SMS: Thank you message via Cloud Function
    */
   async notifyTripCompleted(rideData, driverData, receipt) {
-    console.log("🏁 Notifying customer: Trip Completed");
+    const context = "Trip Completed";
+    console.log(`📧 ${context} - Email with receipt`);
+    console.log(`📱 ${context} - SMS will be sent by Cloud Function`);
 
-    const { customerPhone, customerEmail } = rideData;
-    const driverName =
-      driverData.driverName || driverData.driver?.name || "Your driver";
-    const fare =
-      rideData.estimatedFare || rideData.fare || receipt?.finalFare || "0.00";
-
-    // Generate receipt if not provided
-    const finalReceipt = receipt || ReceiptService.generateReceipt(rideData);
-
-    // SMS Notification
-    if (customerPhone) {
-      try {
-        await SMSService.notifyTripCompleted(customerPhone, driverName, fare);
-        console.log("✅ SMS sent: Trip Completed");
-      } catch (error) {
-        console.error("❌ SMS failed:", error.message);
+    try {
+      // Validate required data
+      if (!rideData) {
+        throw new Error("Missing ride data");
       }
-    }
 
-    // Email Notification with Receipt
-    if (customerEmail && EmailService.isReady()) {
+      const { customerEmail } = rideData;
+
+      // Generate receipt if not provided
+      let finalReceipt;
       try {
-        const receiptHTML = ReceiptService.formatReceiptHTML(finalReceipt);
-        const receiptText = ReceiptService.formatReceiptText(finalReceipt);
-
-        // Send HTML email with receipt
-        const emailMessage = `Trip completed! Thank you for riding with NELA.\n\n${receiptText}\n\nWe hope you enjoyed your ride!\n\nBook again anytime at nela.com`;
-
-        await EmailService.sendRideNotification(
-          customerEmail,
-          "Trip Receipt - Thank You for Riding NELA! 🎉",
-          emailMessage
+        finalReceipt = receipt || ReceiptService.generateReceipt(rideData);
+      } catch (receiptError) {
+        console.error("❌ Receipt generation failed:", receiptError);
+        this._handleError(
+          `${context} - Receipt Generation`,
+          receiptError,
+          customerEmail
         );
-        console.log("✅ Email sent: Trip Completed with Receipt");
-      } catch (error) {
-        console.error("❌ Email failed:", error.message);
-      }
-    }
 
-    // Log receipt for driver records
-    console.log("📄 Receipt Generated:");
-    console.log(ReceiptService.formatReceiptText(finalReceipt));
+        // Create basic fallback receipt
+        finalReceipt = {
+          rideId: rideData.id || "N/A",
+          finalFare: rideData.estimatedFare || rideData.fare || "0.00",
+          customerName: rideData.customerName || "Valued Customer",
+          pickupAddress:
+            rideData.pickupAddress ||
+            rideData.pickup?.address ||
+            "Pickup location",
+          destinationAddress:
+            rideData.destinationAddress ||
+            rideData.dropoff?.address ||
+            "Destination",
+          distance: rideData.distance || "N/A",
+          duration: rideData.estimatedTime || "N/A",
+          completedAt: new Date().toISOString(),
+        };
+      }
+
+      // Format receipt for email
+      const receiptText = ReceiptService.formatReceiptText(finalReceipt);
+
+      // Build comprehensive email
+      const emailSubject = "🎉 Trip Receipt - Thank You for Riding NELA!";
+      const emailMessage = `Thank you for riding with NELA!\n\n${receiptText}\n\nWe hope you enjoyed your ride and look forward to serving you again.\n\nBook your next ride at nela.com\n\nHave feedback? Reply to this email!`;
+
+      // Send email with receipt
+      await this._sendEmail(customerEmail, emailSubject, emailMessage, context);
+
+      // Log receipt for driver records
+      console.log("📄 Receipt Generated:");
+      console.log(receiptText);
+
+      return { success: true, context, receipt: finalReceipt };
+    } catch (error) {
+      this._handleError(context, error, rideData?.customerEmail);
+      // Don't throw - trip completion shouldn't fail due to notification
+      return { success: false, error: error.message };
+    }
   }
 
   /**
-   * Helper: New ride notification (for driver)
+   * Helper: New ride notification (for driver app)
    */
   async sendNewRideNotification(rideData) {
     console.log(
-      "📱 New ride notification (for driver):",
-      rideData.passengerName
+      "📱 New ride notification (driver):",
+      rideData?.passengerName || "Unknown"
     );
-    // This is for the driver app - could add sound/vibration here
+    return { success: true, type: "driver-notification" };
   }
 
+  /**
+   * Helper: Ride update notification (for driver app)
+   */
   async sendRideUpdateNotification(title, body, rideId) {
-    console.log("📱 Ride update notification:", title);
-    // This is for the driver app - could add push notifications here
+    console.log(`📱 Ride update notification (driver): ${title}`);
+    return { success: true, type: "driver-notification" };
   }
 
+  /**
+   * Helper: Payment notification (for driver app)
+   */
   async sendPaymentNotification(amount, rideId) {
-    console.log("💰 Payment notification: $" + amount);
-    // This is for the driver app
+    console.log(`💰 Payment notification (driver): $${amount}`);
+    return { success: true, type: "driver-notification" };
+  }
+
+  /**
+   * Get failed notifications for monitoring
+   */
+  getFailedNotifications() {
+    return [...this.failedNotifications];
+  }
+
+  /**
+   * Clear failed notifications log
+   */
+  clearFailedNotifications() {
+    const count = this.failedNotifications.length;
+    this.failedNotifications = [];
+    console.log(`🗑️ Cleared ${count} failed notification(s)`);
+    return count;
+  }
+
+  /**
+   * Health check
+   */
+  getStatus() {
+    return {
+      initialized: this.isInitialized,
+      mode: "coordinated",
+      smsHandler: "Cloud Function (automatic)",
+      emailHandler: "Driver App (EmailJS)",
+      emailServiceReady: EmailService.isReady(),
+      failedNotificationsCount: this.failedNotifications.length,
+    };
   }
 
   subscribeToNotifications() {

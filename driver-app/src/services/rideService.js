@@ -158,11 +158,89 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
           );
           break;
 
+        // In driver app's rideService.js
+        // Replace the "completed" case (around line 108-120) with this:
+
         case "completed":
+          // ✅ FIX: Convert Firestore Timestamps to JS Dates
+          const rideDataForReceipt = {
+            ...fullRideData,
+            createdAt:
+              fullRideData.createdAt?.toDate?.() ||
+              new Date(fullRideData.createdAt || Date.now()),
+            completedAt: fullRideData.completedAt?.toDate?.() || new Date(),
+            startedAt:
+              fullRideData.startedAt?.toDate?.() ||
+              fullRideData.acceptedAt?.toDate?.() ||
+              new Date(),
+            acceptedAt:
+              fullRideData.acceptedAt?.toDate?.() ||
+              new Date(fullRideData.acceptedAt || Date.now()),
+          };
+
           // Generate receipt
-          const receipt = ReceiptService.generateReceipt(fullRideData);
+          const receipt = ReceiptService.generateReceipt(rideDataForReceipt);
+
+          // ✅ NEW: Capture payment if card payment
+          if (
+            fullRideData.paymentMethod?.id === "card" &&
+            fullRideData.paymentIntentId
+          ) {
+            try {
+              console.log("💳 Capturing card payment...");
+
+              // Import at top of file: import { httpsCallable } from "firebase/functions";
+              // Import at top of file: import { functions } from "./firebase";
+              const capturePaymentFn = httpsCallable(
+                functions,
+                "capturePayment"
+              );
+
+              const captureResult = await capturePaymentFn({
+                paymentIntentId: fullRideData.paymentIntentId,
+                finalAmount:
+                  fullRideData.estimatedPrice ||
+                  fullRideData.fare ||
+                  receipt.finalFare,
+              });
+
+              if (captureResult.data.success) {
+                console.log("✅ Payment captured successfully");
+                additionalData.paymentCaptured = true;
+                additionalData.paymentStatus = "captured";
+              } else {
+                console.error(
+                  "⚠️ Payment capture failed:",
+                  captureResult.data.error
+                );
+                additionalData.paymentCaptured = false;
+                additionalData.paymentError = captureResult.data.error;
+              }
+            } catch (paymentError) {
+              console.error("❌ Payment capture error:", paymentError);
+              additionalData.paymentCaptured = false;
+              additionalData.paymentError = paymentError.message;
+              // Don't throw - still complete the ride even if payment fails
+            }
+          } else if (
+            fullRideData.paymentMethod?.id === "venmo" ||
+            fullRideData.paymentMethod?.id === "cashapp" ||
+            fullRideData.paymentMethod?.id === "paypal"
+          ) {
+            // ✅ Send payment request link via SMS
+            console.log(
+              `📱 Sending ${fullRideData.paymentMethod.id} payment request`
+            );
+            additionalData.paymentRequestSent = true;
+            additionalData.paymentStatus = "request_sent";
+            // The SMS will be sent by Cloud Function automatically
+          } else if (fullRideData.paymentMethod?.id === "cash") {
+            console.log("💰 Cash payment - driver collects");
+            additionalData.paymentStatus = "pending_collection";
+          }
+
           await NotificationService.notifyTripCompleted(
-            fullRideData,
+            rideDataForReceipt,
             additionalData,
             receipt
           );
@@ -171,9 +249,6 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
           console.log("📄 Receipt generated:");
           console.log(ReceiptService.formatReceiptText(receipt));
           break;
-
-        default:
-          console.log(`ℹ️ No notifications for status: ${status}`);
       }
     } catch (notificationError) {
       // Don't fail the ride update if notifications fail
