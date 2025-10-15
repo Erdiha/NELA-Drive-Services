@@ -2,10 +2,7 @@
 // Unified Payment Service - Handles ALL payment methods
 // Card (Stripe) | Venmo | Cash App | PayPal | Cash
 
-const STRIPE_SECRET_KEY =
-  process.env.EXPO_PUBLIC_STRIPE_SECRET_KEY ||
-  "sk_test_51RwQ5dIOpjm2f8f0Nn7jsDfe5CTImVWdYpKXu5Urt3BkmSZlv2kQXjP0hWcEsrO6HhehCACiVanelT4ClHTPbzSy00I4NNzspT";
-
+const STRIPE_SECRET_KEY = process.env.EXPO_PUBLIC_STRIPE_SECRET_KEY;
 // Payment method identifiers
 export const PAYMENT_METHODS = {
   CARD: "card",
