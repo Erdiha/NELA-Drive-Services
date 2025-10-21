@@ -7,8 +7,13 @@ import {
   updateDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   serverTimestamp,
+  query,
+  where,
+  orderBy,
+  limit,
 } from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
@@ -132,9 +137,9 @@ export async function createRideRequest(rideData) {
       distance: rideData.distance,
       estimatedTime: rideData.estimatedTime,
 
-      // ✅ PAYMENT INFO - This was missing!
+      // PAYMENT INFO - PaymentIntent
       paymentMethod: rideData.paymentMethod || null,
-      cardToken: rideData.cardToken || null,
+      paymentIntentId: rideData.paymentIntentId || null,
       paymentStatus: rideData.paymentStatus || "pending",
 
       // Ride info
@@ -191,5 +196,32 @@ export const signOutUser = async () => {
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+};
+
+//review
+export const getPendingReviews = async (userId) => {
+  try {
+    const ridesQuery = query(
+      collection(db, "rides"),
+      where("customerId", "==", userId),
+      where("status", "==", "completed"),
+      where("reviewed", "!=", true),
+      orderBy("reviewed"),
+      orderBy("updatedAt", "desc"),
+      limit(1)
+    );
+
+    const snapshot = await getDocs(ridesQuery);
+
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      return { id: doc.id, ...doc.data() };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error getting pending reviews:", error);
+    return null;
   }
 };

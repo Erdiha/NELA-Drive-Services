@@ -13,7 +13,7 @@ import ScheduleCalendar from "./components/ScheduleCalender";
 import PaymentOptions from "./components/PaymentOptions";
 import AccountSystem from "./components/AccountSystem";
 import AccountDashboard from "./components/AccountDashboard";
-import { sendSMS, SMS_TEMPLATES } from "./services/smsServices";
+// import { sendSMS, SMS_TEMPLATES } from "./services/smsServices";
 import RideTrackingPage from "./components/RideTrackingPage";
 import TermsAndConditionsModal from "./components/TermsAndConditionsModal";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
@@ -21,6 +21,9 @@ import { db } from "./firebase/config";
 import { functions } from "./firebase/config";
 import { httpsCallable } from "firebase/functions";
 import StripePayment from "./components/StripePayment";
+import ReviewModal from "./components/ReviewModal";
+import { submitReview, getPendingReviews } from "./services/reviewService";
+import OnboardingSlider from "./components/OnboardingSlider";
 
 const CURRENT_TERMS_VERSION = "1.0";
 
@@ -137,7 +140,18 @@ function App() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [showCardInput, setShowCardInput] = useState(false);
-  const [cardToken, setCardToken] = useState(null);
+  const [paymentIntentId, setPaymentIntentId] = useState(null);
+  const [tempRideId, setTempRideId] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  console.log("🚀 App component loaded");
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  console.log("👀 Initial showOnboarding:", showOnboarding);
+
+  const [showAbout, setShowAbout] = useState(false);
+  const [pendingReview, setPendingReview] = useState(null);
+  const [hasShownReviewReminder, setHasShownReviewReminder] = useState(false);
+
   console.log("[ORS] key present?", !!import.meta.env?.VITE_ORS_API_KEY);
 
   // ✅ Track if we're currently restoring state (prevent saving during restoration)
@@ -195,6 +209,60 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Replace the onboarding useEffect with TWO separate ones:
+
+  // 1. Check on initial mount (for guests and logged-out users)
+  useEffect(() => {
+    const cookieCheck = document.cookie.includes("nela_onboarding=true");
+    if (!cookieCheck) {
+      setShowOnboarding(true);
+    }
+  }, []); // Empty dependency - runs once on mount
+
+  // 2. Check when user logs in
+  useEffect(() => {
+    if (user && !user.hasSeenOnboarding) {
+      const cookieCheck = document.cookie.includes("nela_onboarding=true");
+      if (!cookieCheck) {
+        setShowOnboarding(true);
+      }
+    }
+  }, [user]); // Runs when user changes
+
+  // In App.jsx, right after the onboarding useEffect, add:
+  useEffect(() => {
+    console.log("🔍 Debug Onboarding:", {
+      showOnboarding,
+      user: user?.email || "guest",
+      userHasSeen: user?.hasSeenOnboarding,
+      cookie: document.cookie.includes("nela_onboarding=true"),
+    });
+  }, [showOnboarding, user]);
+
+  // Check for pending reviews when user logs in
+  useEffect(() => {
+    const checkPendingReviews = async () => {
+      if (user?.uid && !hasShownReviewReminder) {
+        const unreviewed = await getPendingReviews(user.uid);
+        if (unreviewed) {
+          console.log("📝 Found unreviewed ride:", unreviewed.id);
+          setPendingReview(unreviewed);
+        }
+      }
+    };
+
+    checkPendingReviews();
+  }, [user]);
+
+  // Show review reminder once when user tries to book again
+  useEffect(() => {
+    if (pendingReview && !hasShownReviewReminder && priceEstimate && !rideId) {
+      console.log("⏰ Showing one-time review reminder");
+      setShowReviewModal(true);
+      setHasShownReviewReminder(true);
+    }
+  }, [pendingReview, priceEstimate, rideId, hasShownReviewReminder]);
 
   // ✅ Load ride data when rideId changes
   useEffect(() => {
@@ -303,9 +371,22 @@ function App() {
       }
 
       // Clear ride from memory when completed
+      // Clear ride from memory when completed
       if (updatedRide.status === "completed") {
         console.log("✅ Ride completed, clearing from memory");
         inMemoryState.activeRideId = null;
+
+        // Show review modal if user is logged in and hasn't reviewed yet
+        // Show review modal if user is logged in and hasn't reviewed yet
+        if (user && !updatedRide.reviewed) {
+          console.log("📝 Triggering review modal for completed ride");
+          console.log("User exists:", user.uid || user.email);
+          setPendingReview(updatedRide);
+          setTimeout(() => {
+            console.log("⏰ Showing review modal now");
+            setShowReviewModal(true);
+          }, 2000); // Show after 2 seconds
+        }
       }
 
       if (updatedRide.status === "accepted" && showFindingDriver) {
@@ -496,26 +577,27 @@ function App() {
     setShowTermsModal(false);
     alert("You must accept the terms and conditions to book a ride.");
   };
+
   const handlePaymentMethodSelect = (method) => {
     console.log("🔵 Payment method selected:", method);
     setSelectedPaymentMethod(method);
     setShowPaymentOptions(false);
 
-    // ✅ NEW: If card selected, show card input first
+    // ✅ Card payment needs email first
     if (method.id === "card") {
-      console.log("💳 Showing card input modal");
-      setShowCardInput(true);
+      console.log("💳 Card selected - showing booking form first");
+      setShowBookingForm(true); // Get details first, then card
     } else {
-      console.log("📝 Showing booking form");
+      console.log("📋 Showing booking form");
       setShowBookingForm(true);
     }
   };
+
   const handleCardPaymentSuccess = (paymentData) => {
-    console.log("✅ Card tokenized:", paymentData.token);
-    setCardToken(paymentData.token);
+    console.log("✅ PaymentIntent authorized:", paymentData.paymentIntentId);
+    setPaymentIntentId(paymentData.paymentIntentId);
     setShowCardInput(false);
     setShowBookingForm(true);
-    // That's it! No payment confirmation needed now
   };
 
   //card payment error handler
@@ -532,17 +614,23 @@ function App() {
       return;
     }
 
-    setIsBooking(true);
+    // ✅ If card payment and no card processed yet, show card input
+    if (selectedPaymentMethod?.id === "card" && !paymentIntentId) {
+      setShowBookingForm(false);
+      setShowCardInput(true);
+      return;
+    }
 
+    setIsBooking(true);
     try {
-      // Determine payment status
+      // Determine payment status// Determine payment status
       let paymentStatus = "pending";
       if (selectedPaymentMethod?.id === "card") {
-        if (!cardToken) {
-          throw new Error("Card information missing");
+        if (!paymentIntentId) {
+          throw new Error("Payment authorization missing");
         }
-        paymentStatus = "card_on_file";
-        console.log("💳 Card token ready for later charging:", cardToken);
+        paymentStatus = "authorized";
+        console.log("💳 PaymentIntent ready for capture:", paymentIntentId);
       }
 
       const rideData = {
@@ -563,16 +651,16 @@ function App() {
         isScheduled: isScheduled,
         scheduledDateTime: isScheduled ? scheduledDateTime : null,
         paymentMethod: selectedPaymentMethod,
-        cardToken: cardToken, // ✅ Store token for charging when trip completes
-        paymentStatus: paymentStatus, // ✅ Mark as card_on_file or pending
+        paymentIntentId: paymentIntentId,
+        paymentStatus: paymentStatus,
         isGuest: !user,
       };
 
-      console.log("🔍 Booking ride with data:", rideData);
+      console.log("🚀 Booking ride with data:", rideData);
       const newRideId = await createRideRequest(rideData);
 
-      // Clear card token after successful booking
-      setCardToken(null);
+      // Clear payment data after successful booking
+      setPaymentIntentId(null);
 
       setRideId(newRideId);
       inMemoryState.activeRideId = newRideId;
@@ -604,6 +692,53 @@ function App() {
     }
   };
   //  Add Card Input Modal to your JSX (add this BEFORE the showBookingForm modal):
+  const handleReviewSubmit = async (reviewData) => {
+    try {
+      const result = await submitReview(reviewData);
+
+      if (result.success) {
+        console.log("✅ Review submitted successfully");
+        setShowReviewModal(false);
+        setPendingReview(null);
+        alert("Thank you for your feedback!");
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error("❌ Review submission failed:", error);
+      alert("Failed to submit review. Please try again.");
+    }
+  };
+
+  const handleReviewSkip = () => {
+    console.log("⏭️ Review skipped");
+    setShowReviewModal(false);
+    // Don't clear pendingReview - will remind them next time they book
+  };
+
+  const handleOnboardingComplete = async () => {
+    // Set cookie for guests
+    document.cookie = "nela_onboarding=true; max-age=31536000; path=/";
+
+    // If logged in, save to Firebase
+    if (user?.uid) {
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          hasSeenOnboarding: true,
+          onboardingCompletedAt: new Date(),
+        });
+        console.log("✅ Onboarding saved to user profile");
+      } catch (error) {
+        console.error("Error saving onboarding status:", error);
+      }
+    }
+
+    setShowOnboarding(false);
+  };
+
+  const handleAboutClose = () => {
+    setShowAbout(false);
+  };
 
   useEffect(() => {
     if (
@@ -662,12 +797,23 @@ function App() {
               onClick={() => setCurrentPage("home")}
               className="flex items-center space-x-2 group"
             >
-              <div className="w-10 h-10 icon-brand rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <span className="text-white text-lg font-bold">N</span>
+              <div className="w-10 h-10 icon-brand rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <span className="text-white text-2xl font-bold">N</span>
               </div>
               <span className="text-xl text-brand">NELA</span>
             </button>
-
+            <button
+              onClick={() => {
+                setShowOnboarding(true);
+              }}
+              className="w-9 h-9 rounded-full border-2 border-neutral-300 hover:border-blue-500 bg-white hover:bg-blue-50 flex items-center justify-center transition-all duration-300 md:w-auto md:h-auto md:rounded-2xl md:border-0 md:bg-gradient-to-r md:from-blue-500 md:to-purple-500 md:hover:from-blue-600 md:hover:to-purple-600 md:text-white md:shadow-md md:hover:shadow-lg md:px-4 md:py-2"
+              title="How it works"
+            >
+              <span className="text-xl md:hidden">💡</span>
+              <span className="hidden md:flex items-center font-medium text-sm">
+                💡 <span className="ml-2">How It Works</span>
+              </span>
+            </button>
             <div className="flex items-center space-x-3">
               {user ? (
                 <div className="flex items-center space-x-3">
@@ -697,7 +843,27 @@ function App() {
               )}
             </div>
           </div>
-
+          {/* Temporary Debug Button */}
+          {/* <button
+            onClick={() => {
+              console.log("🔍 Debug State:", {
+                showReviewModal,
+                pendingReview,
+                hasShownReviewReminder,
+                user: user?.uid,
+              });
+              setShowReviewModal(true);
+              setPendingReview({
+                id: "test-123",
+                driverName: "Test Driver",
+                customerId: user?.uid || "guest",
+                customerName: user?.name || "Guest",
+              });
+            }}
+            className="px-3 py-1.5 bg-red-500 text-white rounded text-xs"
+          >
+            Test Review
+          </button> */}
           <div className="flex mt-4 space-x-1">
             {[
               { key: "home", label: "Book" },
@@ -794,10 +960,13 @@ function App() {
       />
     );
   }
+  if (currentPage === "about") {
+    return <OnboardingSlider onComplete={() => setCurrentPage("home")} />;
+  }
 
   return (
     <div className="min-h-screen bg-light">
-      <NavigationHeader />
+      {!showOnboarding && <NavigationHeader />}
       <FindingDriverModal />
 
       {showPaymentOptions && (
@@ -826,6 +995,12 @@ function App() {
           <div className="w-full max-w-md card-glass p-8">
             <StripePayment
               amount={parseFloat(priceEstimate.finalPrice)}
+              customerEmail={
+                customerDetails.email ||
+                user?.email ||
+                `${customerDetails.phone.replace(/\D/g, "")}@nela-guest.com`
+              }
+              rideId={tempRideId || `temp_${Date.now()}`}
               onPaymentSuccess={handleCardPaymentSuccess}
               onPaymentError={handleCardPaymentError}
             />
@@ -852,74 +1027,90 @@ function App() {
 
             <form onSubmit={handleSubmitBooking} className="space-y-6">
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-neutral-700 mb-3">
-                    Full Name
-                  </label>
-
-                  <input
-                    type="text"
-                    value={customerDetails.name}
-                    onChange={(e) =>
-                      setCustomerDetails({
-                        ...customerDetails,
-                        name: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-4 bg-neutral-50 border-0 rounded-2xl focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-300 text-neutral-900 placeholder-neutral-500"
-                    placeholder="Enter your full name"
-                    required
-                  />
-                  {!user && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      💡 No account needed - book as guest!
+                {!user ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-neutral-700 mb-3">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={customerDetails.name}
+                        onChange={(e) =>
+                          setCustomerDetails({
+                            ...customerDetails,
+                            name: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-4 bg-neutral-50 border-0 rounded-2xl focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-300 text-neutral-900 placeholder-neutral-500"
+                        placeholder="Enter your full name"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 No account needed - book as guest!
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-neutral-700 mb-3">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={customerDetails.email || ""}
+                        onChange={(e) =>
+                          setCustomerDetails({
+                            ...customerDetails,
+                            email: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-4 bg-neutral-50 border-0 rounded-2xl focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-300 text-neutral-900 placeholder-neutral-500"
+                        placeholder="your@email.com"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        📧 We'll send ride updates to this email
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-neutral-700 mb-3">
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={customerDetails.phone}
+                        onChange={(e) =>
+                          setCustomerDetails({
+                            ...customerDetails,
+                            phone: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-4 bg-neutral-50 border-0 rounded-2xl focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-300 text-neutral-900 placeholder-neutral-500"
+                        placeholder="(555) 123-4567"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        📱 We'll send ride updates to this number
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl p-6 border border-green-200">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">
+                      ✅ Booking as:
                     </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-neutral-700 mb-3">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={customerDetails.email || ""}
-                    onChange={(e) =>
-                      setCustomerDetails({
-                        ...customerDetails,
-                        email: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-4 bg-neutral-50 border-0 rounded-2xl focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-300 text-neutral-900 placeholder-neutral-500"
-                    placeholder="your@email.com"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    📧 We'll send ride updates to this email
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-neutral-700 mb-3">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={customerDetails.phone}
-                    onChange={(e) =>
-                      setCustomerDetails({
-                        ...customerDetails,
-                        phone: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-4 bg-neutral-50 border-0 rounded-2xl focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-300 text-neutral-900 placeholder-neutral-500"
-                    placeholder="(555) 123-4567"
-                    required
-                  />
-                  {!user && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      📱 We'll send ride updates to this number
-                    </p>
-                  )}
-                </div>
+                    <div className="space-y-2">
+                      <p className="text-gray-700">
+                        👤 <span className="font-medium">{user.name}</span>
+                      </p>
+                      <p className="text-gray-700">
+                        📧 <span className="font-medium">{user.email}</span>
+                      </p>
+                      <p className="text-gray-700">
+                        📱 <span className="font-medium">{user.phone}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-gradient-to-r from-neutral-50 to-neutral-100 rounded-2xl p-6">
@@ -1116,8 +1307,8 @@ function App() {
                       <p className="font-semibold text-accent-dark mb-2">
                         Price Match Guarantee
                       </p>
-                      <p className="md:text-sm text-cyan-800 text-xs">
-                        We'll match any competitor's price and apply 15%
+                      <p className="md:text-sm text-cyan-800 text-[0.86rem]">
+                        We'll match any competitor's price and apply 20%
                         discount. Show your driver the current Uber/Lyft rate if
                         needed.
                       </p>
@@ -1161,7 +1352,7 @@ function App() {
                     </div>
                     <div className="inline-flex items-center px-4 py-2 bg-emerald-200 rounded-full">
                       <span className="text-emerald-800 font-semibold md:text-sm text-xs">
-                        💰 You save ${priceEstimate.savings} (15% off)
+                        💰 You save ${priceEstimate.savings} (20% off)
                       </span>
                     </div>
                   </div>
@@ -1174,9 +1365,22 @@ function App() {
                       setPickupAddress(null);
                       setDestinationAddress(null);
                     }}
-                    className="w-full sm:flex-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all duration-300 font-medium text-sm sm:text-base"
+                    className="w-full sm:flex-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all duration-300 font-medium text-sm sm:text-base flex items-center justify-center gap-2"
                   >
-                    ← Edit Trip
+                    <svg
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                      />
+                    </svg>
+                    <span>Edit Trip</span>
                   </button>
                   <button
                     onClick={handleBookRide}
@@ -1245,12 +1449,25 @@ function App() {
         }}
         minDateTime={new Date(Date.now() + 3600000)}
       />
+
+      {/* Review Modal - for pending reviews */}
       {showTermsModal && (
         <TermsAndConditionsModal
           isOpen={showTermsModal}
           onAccept={handleAcceptTerms}
           onDecline={handleDeclineTerms}
         />
+      )}
+      {/* review */}
+      {showReviewModal && pendingReview && (
+        <ReviewModal
+          rideData={pendingReview}
+          onSubmit={handleReviewSubmit}
+          onSkip={handleReviewSkip}
+        />
+      )}
+      {showOnboarding && (
+        <OnboardingSlider onComplete={handleOnboardingComplete} />
       )}
     </div>
   );
