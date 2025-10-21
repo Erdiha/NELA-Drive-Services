@@ -266,9 +266,6 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Firebase Test Component */}
-      {/* <FirebaseTestComponent /> */}
-
       {/* Online/Offline Toggle */}
       <View style={styles.statusContainer}>
         <View style={styles.statusRow}>

@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { db } from "./firebase";
+import { db, functions } from "./firebase";
 import {
   collection,
   query,
@@ -65,7 +65,6 @@ export function subscribeToActiveRides(driverId, callback) {
     const rides = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
-      // Convert Timestamps to strings immediately
       rides.push({
         id: doc.id,
         ...data,
@@ -87,8 +86,6 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
     console.log(`📝 Updating ride ${rideId} to status: ${status}`);
 
     const rideRef = doc(db, "rides", rideId);
-
-    // First check if document exists
     const rideDoc = await getDoc(rideRef);
 
     if (!rideDoc.exists()) {
@@ -106,18 +103,15 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
       ...additionalData,
     };
 
-    // Add driver ID when accepting a ride
     if (status === "accepted") {
       updateData.driverId = DRIVER_ID;
       updateData.acceptedAt = Timestamp.now();
     }
 
-    // Add completion data
     if (status === "completed") {
       updateData.completedAt = Timestamp.now();
     }
 
-    // Add cancellation data
     if (status === "cancelled") {
       updateData.cancelledAt = Timestamp.now();
       if (!updateData.cancelledBy) {
@@ -128,11 +122,9 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
       }
     }
 
-    // Update Firebase
     await updateDoc(rideRef, updateData);
     console.log(`✅ Ride ${rideId} updated successfully`);
 
-    // ✅ NEW: Send notifications based on status change
     const fullRideData = { ...rideData, ...updateData, id: rideId };
 
     try {
@@ -158,11 +150,7 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
           );
           break;
 
-        // In driver app's rideService.js
-        // Replace the "completed" case (around line 108-120) with this:
-
         case "completed":
-          // ✅ FIX: Convert Firestore Timestamps to JS Dates
           const rideDataForReceipt = {
             ...fullRideData,
             createdAt:
@@ -178,62 +166,22 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
               new Date(fullRideData.acceptedAt || Date.now()),
           };
 
-          // Generate receipt
           const receipt = ReceiptService.generateReceipt(rideDataForReceipt);
 
-          // ✅ NEW: Capture payment if card payment
+          // ✅ Payment capture happens automatically via Cloud Function
+          // No manual capture needed - onRideStatusChangev2 handles it
+          console.log("💳 Payment will be processed by Cloud Function");
+
           if (
-            fullRideData.paymentMethod?.id === "card" &&
-            fullRideData.paymentIntentId
-          ) {
-            try {
-              console.log("💳 Capturing card payment...");
-
-              // Import at top of file: import { httpsCallable } from "firebase/functions";
-              // Import at top of file: import { functions } from "./firebase";
-              const capturePaymentFn = httpsCallable(
-                functions,
-                "capturePayment"
-              );
-
-              const captureResult = await capturePaymentFn({
-                paymentIntentId: fullRideData.paymentIntentId,
-                finalAmount:
-                  fullRideData.estimatedPrice ||
-                  fullRideData.fare ||
-                  receipt.finalFare,
-              });
-
-              if (captureResult.data.success) {
-                console.log("✅ Payment captured successfully");
-                additionalData.paymentCaptured = true;
-                additionalData.paymentStatus = "captured";
-              } else {
-                console.error(
-                  "⚠️ Payment capture failed:",
-                  captureResult.data.error
-                );
-                additionalData.paymentCaptured = false;
-                additionalData.paymentError = captureResult.data.error;
-              }
-            } catch (paymentError) {
-              console.error("❌ Payment capture error:", paymentError);
-              additionalData.paymentCaptured = false;
-              additionalData.paymentError = paymentError.message;
-              // Don't throw - still complete the ride even if payment fails
-            }
-          } else if (
             fullRideData.paymentMethod?.id === "venmo" ||
             fullRideData.paymentMethod?.id === "cashapp" ||
             fullRideData.paymentMethod?.id === "paypal"
           ) {
-            // ✅ Send payment request link via SMS
             console.log(
-              `📱 Sending ${fullRideData.paymentMethod.id} payment request`
+              `📱 ${fullRideData.paymentMethod.id} payment link will be sent via SMS`
             );
             additionalData.paymentRequestSent = true;
             additionalData.paymentStatus = "request_sent";
-            // The SMS will be sent by Cloud Function automatically
           } else if (fullRideData.paymentMethod?.id === "cash") {
             console.log("💰 Cash payment - driver collects");
             additionalData.paymentStatus = "pending_collection";
@@ -245,13 +193,12 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
             receipt
           );
 
-          // Log receipt for driver reference
-          console.log("📄 Receipt generated:");
+          console.log("📄 Receipt Generated:");
+          console.log("═══════════════════════════════");
           console.log(ReceiptService.formatReceiptText(receipt));
           break;
       }
     } catch (notificationError) {
-      // Don't fail the ride update if notifications fail
       console.error(
         "⚠️ Notification failed (ride updated successfully):",
         notificationError
@@ -261,7 +208,6 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
     return { success: true };
   } catch (error) {
     console.error("❌ Error updating ride status:", error);
-
     return {
       success: false,
       error: error.message,
@@ -270,14 +216,11 @@ export async function updateRideStatus(rideId, status, additionalData = {}) {
   }
 }
 
-// ✅ NEW: Function to completely delete a ride
 export async function deleteRide(rideId) {
   try {
     console.log(`🗑️ Deleting ride ${rideId}`);
 
     const rideRef = doc(db, "rides", rideId);
-
-    // Check if exists first
     const rideDoc = await getDoc(rideRef);
 
     if (!rideDoc.exists()) {
@@ -299,7 +242,6 @@ export async function deleteRide(rideId) {
   }
 }
 
-// ✅ IMPROVED: Cancel ride with better error handling
 export async function cancelRide(rideId, reason = "Cancelled by driver") {
   try {
     console.log(`🚫 Cancelling ride ${rideId}`);
@@ -316,24 +258,20 @@ export async function cancelRide(rideId, reason = "Cancelled by driver") {
       };
     }
 
-    // Get ride data for notification
     const rideData = rideDoc.data();
 
-    // Update status to cancelled
     const result = await updateRideStatus(rideId, "cancelled", {
       cancelledBy: DRIVER_ID,
       cancelledAt: Timestamp.now(),
       cancelReason: reason,
     });
 
-    // Send SMS notification to customer if phone available
     if (rideData.customerPhone) {
       try {
         await SMSService.notifyTripCancelled(rideData.customerPhone, reason);
         console.log("📱 Cancellation SMS sent to customer");
       } catch (smsError) {
         console.error("Failed to send cancellation SMS:", smsError);
-        // Don't fail the whole cancellation if SMS fails
       }
     }
 
@@ -378,7 +316,6 @@ export async function setDriverOnlineStatus(isOnline) {
       lastUpdated: Timestamp.now(),
     };
 
-    // Add current location if going online
     if (isOnline) {
       const location = await LocationService.getCurrentLocation();
       if (location) {
@@ -404,7 +341,6 @@ export async function getDriverProfile() {
     if (driverDoc.exists()) {
       return { id: driverDoc.id, ...driverDoc.data() };
     } else {
-      // Create default driver profile
       const defaultProfile = {
         name: "Erdi Haciogullari",
         email: "erdiha@gmail.com",
@@ -491,7 +427,6 @@ export async function calculateEarnings(period = "today") {
   }
 }
 
-// Get current driver ID
 export function getCurrentDriverId() {
   return DRIVER_ID;
 }

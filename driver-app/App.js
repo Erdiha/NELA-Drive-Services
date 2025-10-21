@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Provider } from "react-redux";
 import { store } from "./src/store/store";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Import screens
 import DashboardScreen from "./src/screens/DashboardScreen";
@@ -24,19 +25,46 @@ function DashboardStack() {
         name="DashboardMain"
         component={DashboardScreen}
         options={{
-          title: "NELA Driver",
+          headerTitle: () => (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <LinearGradient
+                colors={["#8B5CF6", "#EC4899"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 8,
+                }}
+              >
+                <Text
+                  style={{ color: "#fff", fontSize: 20, fontWeight: "700" }}
+                >
+                  N
+                </Text>
+              </LinearGradient>
+              <Text
+                style={{ color: "#8B5CF6", fontSize: 20, fontWeight: "700" }}
+              >
+                NELA Driver
+              </Text>
+            </View>
+          ),
           headerStyle: {
-            backgroundColor: "#475569",
+            backgroundColor: "#ffffff",
             elevation: 0,
             shadowOpacity: 0,
             borderBottomWidth: 1,
-            borderBottomColor: "#f1f5f9",
-          },
-          headerTintColor: "#fff",
-          headerTitleStyle: {
-            fontWeight: "700",
-            fontSize: 18,
-            letterSpacing: -0.3,
+            borderBottomColor: "#e5e7eb",
           },
         }}
       />
@@ -160,7 +188,7 @@ function TabNavigator() {
                   marginBottom: 2,
                 },
               },
-              "🏠"
+              "ðŸ "
             );
           },
         }}
@@ -180,7 +208,7 @@ function TabNavigator() {
                   marginBottom: 2,
                 },
               },
-              "🚗"
+              "ðŸš—"
             );
           },
         }}
@@ -201,7 +229,7 @@ function TabNavigator() {
                   marginBottom: 2,
                 },
               },
-              "💰"
+              "ðŸ’°"
             );
           },
           headerShown: true,
@@ -235,7 +263,7 @@ function TabNavigator() {
                   marginBottom: 2,
                 },
               },
-              "⚙️"
+              "âš™ï¸"
             );
           },
           headerShown: true,
