@@ -3,15 +3,14 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
-// Firebase configuration for React Native using process.env
 const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGE_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  apiKey: "AIzaSyCIJfIlDJvx_tomr2hQnGlpgMB84G3KYlI",
+  authDomain: "personal-rideshare.firebaseapp.com",
+  projectId: "personal-rideshare",
+  storageBucket: "personal-rideshare.firebasestorage.app",
+  messagingSenderId: "1071735058811",
+  appId: "1:1071735058811:android:e944d46a9e3d4b6394cdde",
+  measurementId: "G-QC0604B68G",
 };
 
 const app = initializeApp(firebaseConfig);

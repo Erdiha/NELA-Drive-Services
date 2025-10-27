@@ -262,7 +262,15 @@ export default function SettingsScreen() {
         <View style={styles.photoSection}>
           <View style={styles.photoContainer}>
             {profile.photoURL ? (
-              <Image source={{ uri: profile.photoURL }} style={styles.photo} />
+              <Image
+                source={{ uri: profile.photoURL }}
+                style={styles.photo}
+                onError={(error) => {
+                  console.log("Image load failed:", error);
+                  setProfile({ ...profile, photoURL: null });
+                }}
+                defaultSource={require("../../assets/logo.png")}
+              />
             ) : (
               <View style={styles.photoPlaceholder}>
                 <Text style={styles.photoPlaceholderText}>

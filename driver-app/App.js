@@ -18,6 +18,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { Provider, useSelector, useDispatch } from "react-redux";
 import { store, setOnlineStatus } from "./src/store/store";
 import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 // Import theme
 import theme from "./src/theme/theme";
@@ -942,10 +943,18 @@ const styles = StyleSheet.create({
 
 export default function App() {
   return (
-    <Provider store={store}>
-      <NavigationContainer>
-        <TabNavigator />
-      </NavigationContainer>
-    </Provider>
+    <SafeAreaProvider>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: "#ffffff" }}
+        edges={["top", "bottom"]}
+      >
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <Provider store={store}>
+          <NavigationContainer>
+            <TabNavigator />
+          </NavigationContainer>
+        </Provider>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

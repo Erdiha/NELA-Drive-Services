@@ -11,6 +11,17 @@ class LocationService {
   // Request location permissions
   async requestPermissions() {
     try {
+      // Check if location services are enabled first
+      const isEnabled = await Location.hasServicesEnabledAsync();
+      if (!isEnabled) {
+        Alert.alert(
+          "Location Services Disabled",
+          "Please enable Location Services in your phone settings to use this app.",
+          [{ text: "OK" }]
+        );
+        return false;
+      }
+
       const { status: foregroundStatus } =
         await Location.requestForegroundPermissionsAsync();
 
@@ -46,13 +57,21 @@ class LocationService {
   async getCurrentLocation() {
     try {
       const hasPermission = await this.requestPermissions();
-      if (!hasPermission) return null;
+      if (!hasPermission) {
+        console.log("Location permission not granted");
+        return null;
+      }
 
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
         timeInterval: 5000,
         distanceInterval: 10,
       });
+
+      if (!location || !location.coords) {
+        console.log("No location data received");
+        return null;
+      }
 
       this.currentLocation = {
         latitude: location.coords.latitude,
@@ -65,7 +84,7 @@ class LocationService {
       console.error("Error getting current location:", error);
       Alert.alert(
         "Location Error",
-        "Unable to get your current location. Please try again."
+        "Unable to get your current location. Make sure Location Services are enabled in your phone settings."
       );
       return null;
     }
@@ -75,7 +94,10 @@ class LocationService {
   async startLocationTracking(callback) {
     try {
       const hasPermission = await this.requestPermissions();
-      if (!hasPermission) return null;
+      if (!hasPermission) {
+        console.log("Location permission not granted for tracking");
+        return null;
+      }
 
       this.watchId = await Location.watchPositionAsync(
         {
@@ -84,6 +106,11 @@ class LocationService {
           distanceInterval: 20, // Or when moved 20 meters
         },
         (location) => {
+          if (!location || !location.coords) {
+            console.log("Invalid location data received");
+            return;
+          }
+
           this.currentLocation = {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
@@ -105,6 +132,10 @@ class LocationService {
       return this.watchId;
     } catch (error) {
       console.error("Error starting location tracking:", error);
+      Alert.alert(
+        "Location Tracking Error",
+        "Unable to start location tracking. Make sure Location Services are enabled."
+      );
       return null;
     }
   }
