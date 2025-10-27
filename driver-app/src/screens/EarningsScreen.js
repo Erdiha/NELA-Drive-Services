@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,52 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSelector } from "react-redux";
 import { calculateEarnings } from "../services/rideService";
+import theme from "../theme/theme";
+
+const AnimatedNumber = ({
+  value,
+  duration = 1000,
+  style,
+  prefix = "",
+  decimals = 2,
+}) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    const numValue = parseFloat(value) || 0;
+    let start = 0;
+    const end = numValue;
+    const increment = end / (duration / 16);
+
+    let current = start;
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= end) {
+        setDisplayValue(end);
+        clearInterval(timer);
+      } else {
+        setDisplayValue(current);
+      }
+    }, 16);
+
+    return () => clearInterval(timer);
+  }, [value, duration]);
+
+  const formatted =
+    decimals === 0
+      ? Math.floor(displayValue).toString()
+      : displayValue.toFixed(decimals);
+
+  return (
+    <Text style={style}>
+      {prefix}
+      {formatted}
+    </Text>
+  );
+};
 
 const EarningsScreen = () => {
   const { completedRides } = useSelector((state) => state.rides);
@@ -65,12 +109,17 @@ const EarningsScreen = () => {
         {periods.map((period) => (
           <TouchableOpacity
             key={period.key}
-            style={[
-              styles.periodButton,
-              selectedPeriod === period.key && styles.periodButtonActive,
-            ]}
+            style={styles.periodButton}
             onPress={() => setSelectedPeriod(period.key)}
           >
+            {selectedPeriod === period.key && (
+              <LinearGradient
+                colors={theme.gradients.primary.colors}
+                start={theme.gradients.primary.start}
+                end={theme.gradients.primary.end}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             <Text
               style={[
                 styles.periodButtonText,
@@ -85,21 +134,44 @@ const EarningsScreen = () => {
 
       {/* Main Earnings Card */}
       <View style={styles.mainCard}>
-        <Text style={styles.mainCardLabel}>Total Earnings</Text>
-        <Text style={styles.mainCardAmount}>${earnings.totalEarnings}</Text>
-        <Text style={styles.mainCardPeriod}>
-          {periods.find((p) => p.key === selectedPeriod)?.label}
-        </Text>
+        <LinearGradient
+          colors={theme.gradients.primary.colors}
+          start={theme.gradients.primary.start}
+          end={theme.gradients.primary.end}
+          style={styles.mainCardGradient}
+        >
+          <Text style={styles.mainCardLabel}>Total Earnings</Text>
+          <AnimatedNumber
+            value={earnings.totalEarnings}
+            duration={1200}
+            style={styles.mainCardAmount}
+            prefix="$"
+          />
+          <Text style={styles.mainCardPeriod}>
+            {periods.find((p) => p.key === selectedPeriod)?.label}
+          </Text>
+        </LinearGradient>
       </View>
 
       {/* Stats Grid */}
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{earnings.rideCount}</Text>
+          <AnimatedNumber
+            value={earnings.rideCount}
+            duration={800}
+            style={styles.statValue}
+            decimals={0}
+          />
           <Text style={styles.statLabel}>Completed Rides</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>${calculateAveragePerRide()}</Text>
+          <AnimatedNumber
+            value={calculateAveragePerRide()}
+            duration={800}
+            style={styles.statValue}
+            prefix="$"
+            decimals={2}
+          />
           <Text style={styles.statLabel}>Avg per Ride</Text>
         </View>
       </View>
@@ -158,7 +230,7 @@ const EarningsScreen = () => {
           </View>
           <View style={styles.performanceRow}>
             <Text style={styles.performanceLabel}>Rating</Text>
-            <Text style={styles.performanceValue}>⭐ 5.0</Text>
+            <Text style={styles.performanceValue}>â­ 5.0</Text>
           </View>
         </View>
       </View>
@@ -169,7 +241,7 @@ const EarningsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.background.primary,
   },
   periodSelector: {
     flexDirection: "row",
@@ -183,50 +255,55 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: theme.colors.background.border,
     alignItems: "center",
-  },
-  periodButtonActive: {
-    backgroundColor: "#10b981",
-    borderColor: "#10b981",
+    overflow: "hidden",
   },
   periodButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#6b7280",
+    color: theme.colors.text.secondary,
   },
   periodButtonTextActive: {
     color: "#ffffff",
+    fontWeight: "700",
   },
   mainCard: {
-    backgroundColor: "#10b981",
-    margin: 16,
+    margin: 10,
     marginTop: 0,
-    padding: 32,
     borderRadius: 16,
+    overflow: "hidden",
+    ...theme.shadows.xl,
+  },
+  mainCardGradient: {
+    padding: 20,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
   },
   mainCardLabel: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: "600",
     color: "#ffffff",
-    opacity: 0.9,
-    marginBottom: 8,
+    marginBottom: 12,
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   mainCardAmount: {
-    fontSize: 48,
-    fontWeight: "700",
+    fontSize: 56,
+    fontWeight: "800",
     color: "#ffffff",
-    marginBottom: 4,
+    marginBottom: 8,
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   mainCardPeriod: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: "500",
     color: "#ffffff",
-    opacity: 0.8,
+    textShadowColor: "rgba(0, 0, 0, 0.2)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   statsGrid: {
     flexDirection: "row",
@@ -240,21 +317,17 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...theme.shadows.sm,
   },
   statValue: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#1f2937",
+    color: theme.colors.text.primary,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: "#6b7280",
+    color: theme.colors.text.secondary,
     textAlign: "center",
   },
   section: {
@@ -264,7 +337,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1f2937",
+    color: theme.colors.text.primary,
     marginBottom: 12,
   },
   emptyState: {
@@ -275,7 +348,7 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 14,
-    color: "#6b7280",
+    color: theme.colors.text.secondary,
     textAlign: "center",
     lineHeight: 20,
   },
@@ -285,7 +358,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
+    borderColor: theme.colors.background.border,
   },
   rideHeader: {
     flexDirection: "row",
@@ -296,31 +369,27 @@ const styles = StyleSheet.create({
   rideName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1f2937",
+    color: theme.colors.text.primary,
   },
   rideFare: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#10b981",
+    color: theme.colors.primary.main,
   },
   rideDestination: {
     fontSize: 14,
-    color: "#6b7280",
+    color: theme.colors.text.secondary,
     marginBottom: 4,
   },
   rideDate: {
     fontSize: 12,
-    color: "#9ca3af",
+    color: theme.colors.text.tertiary,
   },
   performanceCard: {
     backgroundColor: "#ffffff",
     padding: 20,
     borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...theme.shadows.sm,
   },
   performanceRow: {
     flexDirection: "row",
@@ -328,16 +397,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    borderBottomColor: theme.colors.background.border,
   },
   performanceLabel: {
     fontSize: 14,
-    color: "#6b7280",
+    color: theme.colors.text.secondary,
   },
   performanceValue: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1f2937",
+    color: theme.colors.text.primary,
   },
 });
 

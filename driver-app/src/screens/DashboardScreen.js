@@ -1,65 +1,100 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Switch,
   Alert,
+  Animated,
+  ScrollView,
+  SafeAreaView,
+  StatusBar,
+  RefreshControl,
+  Dimensions,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+
+// Theme imports
+import theme from "../theme/theme";
+
+// Service imports
 import {
   subscribeToNewRides,
   subscribeToActiveRides,
   updateRideStatus,
   setDriverOnlineStatus,
   getCurrentDriverId,
+  calculateEarnings,
 } from "../services/rideService";
 import {
   setNewRides,
   setOnlineStatus,
   setActiveRides,
   setDriverLocation,
+  updateEarnings,
 } from "../store/store";
 import RideRequestCard from "../components/RideRequestsCard";
 import LocationService from "../services/locationService";
 import NotificationService from "../services/notificationService";
-import EmailService from "../services/emailService";
-import { Linking } from "react-native";
-// import FirebaseTestComponent from "../components/FirebaseTestComponent";
+
+const { width } = Dimensions.get("window");
 
 export default function DashboardScreen({ navigation }) {
   const dispatch = useDispatch();
-  const { newRides, activeRides, isOnline, driverLocation } = useSelector(
+  const { newRides, activeRides, isOnline, earnings } = useSelector(
     (state) => state.rides
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [locationWatcher, setLocationWatcher] = useState(null);
+  const [todayStats, setTodayStats] = useState({ trips: 0, earnings: "0.00" });
 
-  // Initialize services on component mount
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
     initializeServices();
-    return () => {
-      // Cleanup when component unmounts
-      if (locationWatcher) {
-        LocationService.stopLocationTracking();
-      }
-    };
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
-  const initializeServices = async () => {
-    // Initialize notifications
-    await NotificationService.initialize();
+  useEffect(() => {
+    if (isOnline) {
+      // Pulse animation for online state
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isOnline]);
 
-    // Get initial location
+  const initializeServices = async () => {
+    setLoading(true);
+    await NotificationService.initialize();
     const location = await LocationService.getCurrentLocation();
     if (location) {
       dispatch(setDriverLocation(location));
     }
 
-    // Load active rides immediately on app start
+    // Subscribe to active rides
     const activeRidesUnsubscribe = subscribeToActiveRides(
       getCurrentDriverId(),
       (rides) => {
@@ -68,33 +103,32 @@ export default function DashboardScreen({ navigation }) {
       }
     );
 
-    // Store unsubscribe function for cleanup
+    // Load today's earnings
+    await loadEarnings();
+
     return activeRidesUnsubscribe;
+  };
+
+  const loadEarnings = async () => {
+    const todayEarnings = await calculateEarnings("today");
+    setTodayStats({
+      trips: todayEarnings.rideCount || 0,
+      earnings: todayEarnings.totalEarnings || "0.00",
+    });
   };
 
   useEffect(() => {
     let unsubscribe;
 
     if (isOnline) {
-      // Subscribe to new rides
       unsubscribe = subscribeToNewRides((rides) => {
         dispatch(setNewRides(rides));
-        setLoading(false);
       });
-
-      // Start location tracking
       startLocationTracking();
-
-      // Update driver online status in Firebase
       setDriverOnlineStatus(true);
     } else {
       dispatch(setNewRides([]));
-      setLoading(false);
-
-      // Stop location tracking
       stopLocationTracking();
-
-      // Update driver offline status in Firebase
       setDriverOnlineStatus(false);
     }
 
@@ -106,8 +140,6 @@ export default function DashboardScreen({ navigation }) {
   const startLocationTracking = async () => {
     const watcher = await LocationService.startLocationTracking((location) => {
       dispatch(setDriverLocation(location));
-      // Update location in Firebase for real-time tracking
-      // updateDriverLocation(location); // Uncomment when implementing real-time tracking
     });
     setLocationWatcher(watcher);
   };
@@ -119,15 +151,45 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const toggleOnlineStatus = () => {
-    if (!isOnline) {
-      Alert.alert("Go Online?", "You'll start receiving ride requests", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Go Online", onPress: () => dispatch(setOnlineStatus(true)) },
-      ]);
-    } else {
-      dispatch(setOnlineStatus(false));
+  const handleGoOnline = async () => {
+    try {
+      const location = await LocationService.getCurrentLocation();
+      if (!location) {
+        Alert.alert(
+          "Location Required",
+          "Please enable location services to go online."
+        );
+        return;
+      }
+      dispatch(setOnlineStatus(true));
+      NotificationService.sendRideUpdateNotification(
+        "You're Online",
+        "Ready to accept ride requests"
+      );
+    } catch (error) {
+      Alert.alert("Error", "Failed to go online. Please try again.");
     }
+  };
+
+  const handleGoOffline = () => {
+    Alert.alert(
+      "Go Offline?",
+      "You won't receive any ride requests while offline.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Go Offline",
+          style: "destructive",
+          onPress: () => {
+            dispatch(setOnlineStatus(false));
+            NotificationService.sendRideUpdateNotification(
+              "You're Offline",
+              "You won't receive ride requests"
+            );
+          },
+        },
+      ]
+    );
   };
 
   const handleAcceptRide = async (ride) => {
@@ -169,55 +231,13 @@ export default function DashboardScreen({ navigation }) {
 
       await updateRideStatus(ride.id, "accepted", driverInfo);
 
-      // ✅ FIXED EMAIL NOTIFICATION - Don't block on failure
-      if (ride.customerEmail && EmailService.isReady()) {
-        const emailMessage = ride.isScheduled
-          ? `Hi! I'm Erdi, your NELA driver. Your ride is confirmed for ${new Date(
-              ride.scheduledDateTime
-            ).toLocaleString()}. See you then!`
-          : `Hi! I'm Erdi, your NELA driver. I'm on my way to pick you up. ETA: 8 minutes.`;
-
-        // Fire and forget - don't await
-        EmailService.sendRideNotification(
-          ride.customerEmail,
-          "NELA Ride Accepted",
-          emailMessage
-        ).catch((err) => {
-          console.warn("📧 Email failed silently:", err);
-        });
-      } else {
-        console.log("📧 Email skipped (not configured or no customer email)");
-      }
-
-      // SMS PROMPT (this works reliably)
-      const smsMessage = ride.isScheduled
-        ? `Hi! I'm Erdi, your NELA driver. Your ride is confirmed for ${new Date(
-            ride.scheduledDateTime
-          ).toLocaleString()}. See you then!`
-        : `Hi! I'm Erdi, your NELA driver. I'm on my way to pick you up. ETA: 8 minutes.`;
-
-      Linking.openURL(
-        `sms:${ride.customerPhone}?body=${encodeURIComponent(smsMessage)}`
-      );
-
-      const updatedActiveRides = [
-        ...activeRides,
-        { ...ride, status: "accepted", ...driverInfo },
-      ];
-      dispatch(setActiveRides(updatedActiveRides));
-
-      const updatedNewRides = newRides.filter((r) => r.id !== ride.id);
-      dispatch(setNewRides(updatedNewRides));
+      // Navigate to Active Rides
+      navigation.navigate("ActiveRides");
 
       NotificationService.sendRideUpdateNotification(
         "Ride Accepted",
-        `You accepted a ride to ${ride.destination}`,
-        ride.id
+        `Pickup at ${ride.pickupLocation || ride.pickup?.address}`
       );
-
-      Alert.alert("Ride Accepted!", "Ride accepted successfully!", [
-        { text: "OK", style: "default" },
-      ]);
     } catch (error) {
       Alert.alert("Error", "Failed to accept ride. Please try again.");
       console.error("Error accepting ride:", error);
@@ -226,33 +246,27 @@ export default function DashboardScreen({ navigation }) {
 
   const handleDeclineRide = async (ride) => {
     try {
-      // Update ride status to show no driver available
       await updateRideStatus(ride.id, "no_driver_available", {
         declinedBy: getCurrentDriverId(),
         declinedAt: new Date(),
-        message: "No drivers available at this time. Please try again.",
       });
 
-      // Remove from local state
       const updatedRides = newRides.filter((r) => r.id !== ride.id);
       dispatch(setNewRides(updatedRides));
     } catch (error) {
       console.error("Error declining ride:", error);
-      // Still remove from local state even if Firebase update fails
-      const updatedRides = newRides.filter((r) => r.id !== ride.id);
-      dispatch(setNewRides(updatedRides));
     }
   };
 
-  const navigateToPickup = (ride) => {
-    // TODO: Implement navigation to pickup location
-    // This would typically open a maps app or internal navigation
-    console.log("Navigate to:", ride.pickupLocation);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadEarnings();
+    setRefreshing(false);
   };
 
   const renderRideRequest = ({ item }) => (
     <RideRequestCard
-      passengerName={item.passengerName || "Anonymous"}
+      passengerName={item.passengerName || "Rider"}
       pickupLocation={item.pickupLocation || item.pickup?.address}
       destination={item.destination || item.dropoff?.address}
       estimatedFare={`$${item.estimatedFare || item.fare}`}
@@ -264,125 +278,485 @@ export default function DashboardScreen({ navigation }) {
     />
   );
 
+  // OFFLINE STATE
+  if (!isOnline) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <ScrollView
+          contentContainerStyle={styles.offlineContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {/* Header */}
+          <View style={styles.offlineHeader}>
+            <Text style={styles.offlineTitle}>You're Offline</Text>
+            <Text style={styles.offlineSubtitle}>
+              Go online to start accepting rides
+            </Text>
+          </View>
+
+          {/* Today's Summary Card */}
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Today's Summary</Text>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>${todayStats.earnings}</Text>
+                <Text style={styles.summaryText}>Earnings</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>{todayStats.trips}</Text>
+                <Text style={styles.summaryText}>Trips</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Large Go Online Button */}
+          <TouchableOpacity
+            style={styles.goOnlineButton}
+            onPress={handleGoOnline}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={theme.gradients.primary.colors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.goOnlineGradient}
+            >
+              <View style={styles.goOnlineIcon}>
+                <Text style={styles.goOnlineIconText}>⚡</Text>
+              </View>
+              <Text style={styles.goOnlineText}>Go Online</Text>
+              <Text style={styles.goOnlineSubtext}>
+                Start receiving ride requests
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Quick Tips */}
+          <View style={styles.tipsCard}>
+            <Text style={styles.tipsTitle}>💡 Quick Tips</Text>
+            <View style={styles.tipItem}>
+              <Text style={styles.tipBullet}>•</Text>
+              <Text style={styles.tipText}>
+                High demand areas: Downtown, Airport, Universities
+              </Text>
+            </View>
+            <View style={styles.tipItem}>
+              <Text style={styles.tipBullet}>•</Text>
+              <Text style={styles.tipText}>
+                Peak hours: 7-9 AM, 5-8 PM weekdays
+              </Text>
+            </View>
+            <View style={styles.tipItem}>
+              <Text style={styles.tipBullet}>•</Text>
+              <Text style={styles.tipText}>
+                Maintain 4.8+ rating for best ride offers
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ONLINE STATE
   return (
-    <View style={styles.container}>
-      {/* Online/Offline Toggle */}
-      <View style={styles.statusContainer}>
-        <View style={styles.statusRow}>
-          <Text style={styles.statusLabel}>
-            {isOnline ? "You're Online" : "You're Offline"}
-          </Text>
-          <Switch
-            value={isOnline}
-            onValueChange={toggleOnlineStatus}
-            trackColor={{ false: "#767577", true: "#3B82F6" }}
-            thumbColor={isOnline ? "#ffffff" : "#f4f3f4"}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+        {/* Online Status Bar */}
+        <LinearGradient
+          colors={theme.gradients.primary.colors}
+          start={theme.gradients.primary.start}
+          end={theme.gradients.primary.end}
+          style={styles.onlineBar}
+        >
+          <Animated.View
+            style={[
+              styles.onlineIndicator,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
           />
+          <Text style={styles.onlineBarText}>
+            You're Online • Ready for rides
+          </Text>
+          <TouchableOpacity
+            style={styles.offlineButton}
+            onPress={handleGoOffline}
+          >
+            <Text style={styles.offlineButtonText}>Go Offline</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+        {/* Quick Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>${todayStats.earnings}</Text>
+            <Text style={styles.statLabel}>Today's Earnings</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{todayStats.trips}</Text>
+            <Text style={styles.statLabel}>Trips Today</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{activeRides.length}</Text>
+            <Text style={styles.statLabel}>Active</Text>
+          </View>
         </View>
-        <Text style={styles.statusSubtext}>
-          {isOnline
-            ? "Ready to receive ride requests"
-            : "Turn on to start receiving requests"}
-        </Text>
 
-        {/* Show active rides count */}
-        {activeRides.length > 0 && (
-          <Text style={styles.activeRidesText}>
-            {activeRides.length} active ride
-            {activeRides.length !== 1 ? "s" : ""}
-          </Text>
-        )}
-      </View>
+        {/* Ride Requests */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {newRides.length > 0 && (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>New Ride Requests</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{newRides.length}</Text>
+              </View>
+            </View>
+          )}
 
-      {/* Ride Requests */}
-      <View style={styles.ridesSection}>
-        <Text style={styles.sectionTitle}>
-          {isOnline
-            ? `New Requests (${newRides.length})`
-            : "Go online to see requests"}
-        </Text>
-
-        {loading ? (
-          <Text style={styles.emptyText}>Loading...</Text>
-        ) : newRides.length === 0 ? (
-          <Text style={styles.emptyText}>
-            {isOnline ? "No new ride requests" : "Turn on to receive requests"}
-          </Text>
-        ) : (
-          <FlatList
-            data={newRides}
-            renderItem={renderRideRequest}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
-    </View>
+          {loading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>Loading requests...</Text>
+            </View>
+          ) : newRides.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconContainer}>
+                <Text style={styles.emptyIcon}>🔍</Text>
+              </View>
+              <Text style={styles.emptyTitle}>Looking for rides...</Text>
+              <Text style={styles.emptyText}>
+                New ride requests will appear here.{"\n"}
+                Make sure your location is accurate.
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={newRides}
+              renderItem={renderRideRequest}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              contentContainerStyle={styles.listContent}
+            />
+          )}
+        </ScrollView>
+      </Animated.View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fafafa",
-    padding: 16,
+    backgroundColor: theme.colors.background.primary,
   },
-  statusContainer: {
-    backgroundColor: "#ffffff",
+
+  // ==================== OFFLINE STATE ====================
+  offlineContainer: {
+    flexGrow: 1,
+    padding: 20,
+    paddingTop: 40,
+  },
+
+  offlineHeader: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+
+  offlineTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: theme.colors.text.primary,
+    marginBottom: 8,
+  },
+
+  offlineSubtitle: {
+    fontSize: 16,
+    color: theme.colors.text.secondary,
+    textAlign: "center",
+  },
+
+  // Summary Card
+  summaryCard: {
+    backgroundColor: theme.colors.background.card,
+    borderRadius: 20,
     padding: 24,
-    borderRadius: 12,
     marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "#f1f5f9",
+    ...theme.shadows.lg,
   },
-  statusRow: {
+
+  summaryLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: theme.colors.text.secondary,
+    marginBottom: 16,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  summaryItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  summaryValue: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: theme.colors.text.primary,
+    marginBottom: 4,
+  },
+
+  summaryText: {
+    fontSize: 14,
+    color: theme.colors.text.secondary,
+    fontWeight: "500",
+  },
+
+  summaryDivider: {
+    width: 1,
+    height: 50,
+    backgroundColor: theme.colors.neutral[200],
+  },
+
+  // Go Online Button
+  goOnlineButton: {
+    borderRadius: 24,
+    overflow: "hidden",
+    marginBottom: 24,
+    ...theme.shadows.xl,
+  },
+
+  goOnlineGradient: {
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+    alignItems: "center",
+  },
+
+  goOnlineIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+
+  goOnlineIconText: {
+    fontSize: 40,
+  },
+
+  goOnlineText: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#ffffff",
+    marginBottom: 8,
+  },
+
+  goOnlineSubtext: {
+    fontSize: 15,
+    color: "rgba(255, 255, 255, 0.9)",
+    fontWeight: "500",
+  },
+
+  // Tips Card
+  tipsCard: {
+    backgroundColor: theme.colors.background.card,
+    borderRadius: 16,
+    padding: 20,
+    ...theme.shadows.sm,
+  },
+
+  tipsTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: theme.colors.text.primary,
+    marginBottom: 16,
+  },
+
+  tipItem: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+
+  tipBullet: {
+    fontSize: 16,
+    color: theme.colors.primary.main,
+    marginRight: 12,
+    fontWeight: "700",
+  },
+
+  tipText: {
+    flex: 1,
+    fontSize: 15,
+    color: theme.colors.text.secondary,
+    lineHeight: 22,
+  },
+
+  // ==================== ONLINE STATE ====================
+  onlineBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+  },
+
+  onlineIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#ffffff",
+  },
+
+  onlineBarText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+
+  offlineButton: {
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    ...theme.shadows.md,
+  },
+
+  offlineButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: theme.colors.primary.main,
+  },
+
+  // Stats Container
+  statsContainer: {
+    flexDirection: "row",
+    backgroundColor: theme.colors.background.card,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    padding: 20,
+    ...theme.shadows.md,
+  },
+
+  statCard: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  statValue: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: theme.colors.text.primary,
+    marginBottom: 4,
+  },
+
+  statLabel: {
+    fontSize: 12,
+    color: theme.colors.text.secondary,
+    fontWeight: "600",
+  },
+
+  statDivider: {
+    width: 1,
+    height: "100%",
+    backgroundColor: theme.colors.neutral[200],
+  },
+
+  // Ride Requests Section
+  scrollView: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+
+  sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  statusLabel: {
+
+  sectionTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1a202c",
-    letterSpacing: -0.4,
+    color: theme.colors.text.primary,
   },
-  statusSubtext: {
+
+  badge: {
+    backgroundColor: theme.colors.primary.main,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 32,
+    alignItems: "center",
+  },
+
+  badgeText: {
     fontSize: 14,
-    color: "#64748b",
-    fontWeight: "500",
-    lineHeight: 20,
+    fontWeight: "800",
+    color: "#ffffff",
   },
-  activeRidesText: {
-    fontSize: 14,
-    color: "#10b981",
-    fontWeight: "600",
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
+
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 80,
+    paddingHorizontal: 24,
   },
-  ridesSection: {
-    flex: 1,
+
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: theme.colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a202c",
-    marginBottom: 16,
-    letterSpacing: -0.2,
+
+  emptyIcon: {
+    fontSize: 48,
   },
+
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: theme.colors.text.primary,
+    marginBottom: 12,
+  },
+
   emptyText: {
+    fontSize: 15,
+    color: theme.colors.text.secondary,
     textAlign: "center",
-    color: "#64748b",
-    fontSize: 16,
-    fontWeight: "500",
-    marginTop: 60,
     lineHeight: 24,
+  },
+
+  listContent: {
+    gap: 12,
   },
 });

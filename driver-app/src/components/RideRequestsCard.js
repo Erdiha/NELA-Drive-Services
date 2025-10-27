@@ -1,6 +1,27 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 
+const theme = {
+  colors: {
+    primary: { main: "#7c3aed" },
+    status: { success: "#10b981" },
+    background: { card: "#ffffff", border: "#e4e4e7" },
+    text: { primary: "#18181b", secondary: "#3f3f46", tertiary: "#71717a" },
+    neutral: { 100: "#f4f4f5", 200: "#e4e4e7" },
+  },
+  spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
+  layout: { borderRadius: { md: 8, lg: 12 } },
+  shadows: {
+    sm: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 1,
+    },
+  },
+};
+
 const RideRequestCard = ({
   passengerName = "John Doe",
   pickupLocation = "123 Main Street",
@@ -14,79 +35,82 @@ const RideRequestCard = ({
 }) => {
   return (
     <View style={styles.container}>
-      {/* Header with passenger info */}
-      <View style={styles.header}>
+      {/* Passenger & Fare Row */}
+      <View style={styles.topRow}>
         <View style={styles.passengerInfo}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {passengerName.charAt(0).toUpperCase()}
             </Text>
           </View>
-          <View>
+          <View style={styles.passengerDetails}>
             <Text style={styles.passengerName}>{passengerName}</Text>
-            <View style={styles.ratingContainer}>
+            <View style={styles.ratingRow}>
               <Text style={styles.star}>★</Text>
               <Text style={styles.rating}>{passengerRating}</Text>
             </View>
           </View>
         </View>
+
         <View style={styles.fareContainer}>
           <Text style={styles.fare}>{estimatedFare}</Text>
-          <Text style={styles.fareLabel}>Estimated</Text>
         </View>
       </View>
 
-      {/* Trip details */}
-      <View style={styles.tripDetails}>
-        <View style={styles.locationContainer}>
-          <View style={styles.locationRow}>
-            <View style={styles.pickupDot} />
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationLabel}>Pickup</Text>
-              <Text style={styles.locationText} numberOfLines={1}>
-                {pickupLocation}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.routeLine} />
-          <View style={styles.locationRow}>
-            <View style={styles.destinationDot} />
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationLabel}>Destination</Text>
-              <Text style={styles.locationText} numberOfLines={1}>
-                {destination}
-              </Text>
-            </View>
+      {/* Trip Details */}
+      <View style={styles.tripSection}>
+        {/* Pickup */}
+        <View style={styles.locationRow}>
+          <View style={styles.pickupDot} />
+          <View style={styles.locationTextContainer}>
+            <Text style={styles.locationLabel}>Pickup</Text>
+            <Text style={styles.locationText} numberOfLines={1}>
+              {pickupLocation}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.tripStats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{estimatedTime}</Text>
-            <Text style={styles.statLabel}>Time</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{distance}</Text>
-            <Text style={styles.statLabel}>Distance</Text>
+        <View style={styles.routeLine} />
+
+        {/* Destination */}
+        <View style={styles.locationRow}>
+          <View style={styles.destinationDot} />
+          <View style={styles.locationTextContainer}>
+            <Text style={styles.locationLabel}>Dropoff</Text>
+            <Text style={styles.locationText} numberOfLines={1}>
+              {destination}
+            </Text>
           </View>
         </View>
       </View>
 
-      {/* Action buttons */}
+      {/* Stats Row */}
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statIcon}>⏱</Text>
+          <Text style={styles.statText}>{estimatedTime}</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statIcon}>📍</Text>
+          <Text style={styles.statText}>{distance}</Text>
+        </View>
+      </View>
+
+      {/* Action Buttons */}
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.button, styles.declineButton]}
+          style={styles.declineButton}
           onPress={onDecline}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <Text style={styles.declineText}>Decline</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.acceptButton]}
+          style={styles.acceptButton}
           onPress={onAccept}
-          activeOpacity={0.9}
+          activeOpacity={0.8}
         >
           <Text style={styles.acceptText}>Accept Ride</Text>
         </TouchableOpacity>
@@ -97,181 +121,206 @@ const RideRequestCard = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    marginVertical: 8,
-    marginHorizontal: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: theme.colors.background.card,
+    borderRadius: theme.layout.borderRadius.lg,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
+    borderColor: theme.colors.background.border,
+    ...theme.shadows.sm,
   },
-  header: {
+
+  // Top Row - Passenger & Fare
+  topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    paddingBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
+
   passengerInfo: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
   },
+
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#2d3748",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.primary.main,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: theme.spacing.md,
   },
+
   avatarText: {
     color: "#ffffff",
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
   },
+
+  passengerDetails: {
+    flex: 1,
+  },
+
   passengerName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "600",
-    color: "#1a202c",
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    color: theme.colors.text.primary,
+    marginBottom: 2,
   },
-  ratingContainer: {
+
+  ratingRow: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   star: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#f59e0b",
     marginRight: 4,
   },
+
   rating: {
     fontSize: 14,
-    color: "#64748b",
+    color: theme.colors.text.secondary,
     fontWeight: "500",
   },
+
   fareContainer: {
-    alignItems: "flex-end",
+    backgroundColor: theme.colors.neutral[100],
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.layout.borderRadius.md,
   },
+
   fare: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
-    color: "#1a202c",
-    letterSpacing: -0.5,
+    color: theme.colors.status.success,
   },
-  fareLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 2,
+
+  // Trip Section
+  tripSection: {
+    marginBottom: theme.spacing.lg,
   },
-  tripDetails: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  locationContainer: {
-    marginBottom: 16,
-  },
+
   locationRow: {
     flexDirection: "row",
     alignItems: "flex-start",
   },
+
   pickupDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#10b981",
-    marginRight: 12,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.status.success,
+    marginRight: theme.spacing.md,
     marginTop: 6,
   },
+
   destinationDot: {
-    width: 12,
-    height: 12,
+    width: 10,
+    height: 10,
     borderRadius: 2,
     backgroundColor: "#ef4444",
-    marginRight: 12,
+    marginRight: theme.spacing.md,
     marginTop: 6,
   },
+
   routeLine: {
     width: 2,
-    height: 20,
-    backgroundColor: "#e2e8f0",
-    marginLeft: 5,
-    marginVertical: 8,
+    height: 16,
+    backgroundColor: theme.colors.neutral[200],
+    marginLeft: 4,
+    marginVertical: theme.spacing.xs,
   },
-  locationInfo: {
+
+  locationTextContainer: {
     flex: 1,
   },
+
   locationLabel: {
     fontSize: 12,
-    color: "#64748b",
+    color: theme.colors.text.tertiary,
     fontWeight: "500",
-    marginBottom: 4,
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
+
   locationText: {
-    fontSize: 16,
-    color: "#1a202c",
+    fontSize: 15,
+    color: theme.colors.text.primary,
     fontWeight: "400",
-    lineHeight: 22,
   },
-  tripStats: {
+
+  // Stats Row
+  statsRow: {
     flexDirection: "row",
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: theme.colors.neutral[100],
+    borderRadius: theme.layout.borderRadius.md,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
   },
+
   statItem: {
     flex: 1,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
+
   statDivider: {
     width: 1,
-    backgroundColor: "#e2e8f0",
-    marginHorizontal: 16,
+    backgroundColor: theme.colors.neutral[200],
   },
-  statValue: {
+
+  statIcon: {
     fontSize: 16,
+  },
+
+  statText: {
+    fontSize: 15,
     fontWeight: "600",
-    color: "#1a202c",
-    marginBottom: 4,
+    color: theme.colors.text.primary,
   },
-  statLabel: {
-    fontSize: 12,
-    color: "#64748b",
-  },
+
+  // Action Buttons
   actions: {
     flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 12,
+    gap: theme.spacing.md,
   },
-  button: {
+
+  declineButton: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: theme.layout.borderRadius.md,
     alignItems: "center",
-  },
-  declineButton: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.neutral[100],
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: theme.colors.neutral[200],
   },
-  acceptButton: {
-    backgroundColor: "#1a202c",
-  },
+
   declineText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#64748b",
+    color: theme.colors.text.secondary,
   },
+
+  acceptButton: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: theme.layout.borderRadius.md,
+    alignItems: "center",
+    backgroundColor: theme.colors.primary.main,
+  },
+
   acceptText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#ffffff",
   },
 });
