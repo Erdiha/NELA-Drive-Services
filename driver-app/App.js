@@ -36,6 +36,10 @@ import EarningsScreen from "./src/screens/EarningsScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import RideDetailsScreen from "./src/screens/RideDetailsScreen";
 
+import ReviewService from "./src/services/reviewService";
+import { setDriverRating } from "./src/store/store";
+import { getCurrentDriverId } from "./src/services/rideService";
+
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 const { width, height } = Dimensions.get("window");
@@ -441,6 +445,19 @@ function TabNavigator() {
   useEffect(() => {
     SoundService.initialize();
   }, []);
+
+  useEffect(() => {
+    const driverId = getCurrentDriverId();
+
+    const unsubscribe = ReviewService.subscribeToDriverReviews(
+      driverId,
+      (ratingData) => {
+        dispatch(setDriverRating(ratingData));
+      }
+    );
+
+    return () => unsubscribe();
+  }, [dispatch]);
 
   const toggleOnline = async () => {
     if (isLoading) return;

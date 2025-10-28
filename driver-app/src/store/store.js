@@ -47,6 +47,13 @@ const rideSlice = createSlice({
       week: 0,
       month: 0,
     },
+    rating: {
+      average: 5.0,
+      count: 0,
+      reviews: [],
+      topCompliments: [],
+      lastUpdated: null,
+    },
   },
   reducers: {
     setNewRides: (state, action) => {
@@ -92,6 +99,12 @@ const rideSlice = createSlice({
         state.activeRides[activeRideIndex].updatedAt = new Date().toISOString();
       }
     },
+    setDriverRating: (state, action) => {
+      state.rating = {
+        ...action.payload,
+        lastUpdated: new Date().toISOString(),
+      };
+    },
   },
 });
 
@@ -105,6 +118,7 @@ export const {
   setOnlineStatus,
   setDriverLocation,
   updateEarnings,
+  setDriverRating,
   updateRideStatus,
 } = rideSlice.actions;
 

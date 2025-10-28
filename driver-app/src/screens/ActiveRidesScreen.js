@@ -3,12 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   Pressable,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
+import { LinearGradient } from "expo-linear-gradient";
+import theme from "../theme/theme";
 import { updateRideStatus } from "../services/rideService";
 import {
   removeActiveRide,
@@ -17,7 +19,7 @@ import {
   updateRideStatus as updateLocalRideStatus,
 } from "../store/store";
 import LocationService from "../services/locationService";
-import RideLocationUpdater from "../services/rideLocationUpdater"; // ✅ NEW
+import RideLocationUpdater from "../services/rideLocationUpdater"; // âœ… NEW
 
 const RideStatusCard = ({
   ride,
@@ -162,7 +164,7 @@ const RideStatusCard = ({
                 {ride.passengerName || "Anonymous"}
               </Text>
               <View style={styles.ratingRow}>
-                <Text style={styles.ratingStar}>⭐</Text>
+                <Text style={styles.ratingStar}>â­</Text>
                 <Text style={styles.rating}>
                   {ride.passengerRating
                     ? ride.passengerRating.toFixed(1)
@@ -254,24 +256,28 @@ export default function ActiveRidesScreen({ navigation }) {
   const dispatch = useDispatch();
   const { activeRides, driverLocation } = useSelector((state) => state.rides);
 
-  const sortedRides = [...activeRides].sort((a, b) => {
-    const aScheduled =
-      a.scheduledDateTime && new Date(a.scheduledDateTime) > new Date();
-    const bScheduled =
-      b.scheduledDateTime && new Date(b.scheduledDateTime) > new Date();
+  // Separate scheduled and immediate rides
+  const scheduledRides = activeRides
+    .filter(
+      (ride) =>
+        ride.scheduledDateTime && new Date(ride.scheduledDateTime) > new Date()
+    )
+    .sort(
+      (a, b) => new Date(a.scheduledDateTime) - new Date(b.scheduledDateTime)
+    );
 
-    if (aScheduled && !bScheduled) return -1;
-    if (!aScheduled && bScheduled) return 1;
+  const immediateRides = activeRides
+    .filter(
+      (ride) =>
+        !ride.scheduledDateTime ||
+        new Date(ride.scheduledDateTime) <= new Date()
+    )
+    .sort((a, b) => {
+      const statusOrder = { in_progress: 1, arrived: 2, accepted: 3 };
+      return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+    });
 
-    if (aScheduled && bScheduled) {
-      return new Date(a.scheduledDateTime) - new Date(b.scheduledDateTime);
-    }
-
-    const statusOrder = { in_progress: 1, arrived: 2, accepted: 3 };
-    return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
-  });
-
-  // ✅ FIXED: Manage location updates - use useMemo for stable dependency
+  // âœ… FIXED: Manage location updates - use useMemo for stable dependency
   const activeRideStates = React.useMemo(() => {
     return activeRides
       .map((r) => `${r.id}:${r.status}`)
@@ -280,7 +286,9 @@ export default function ActiveRidesScreen({ navigation }) {
   }, [activeRides]);
 
   useEffect(() => {
-    console.log(`🔄 Checking location updates for ${activeRides.length} rides`);
+    console.log(
+      `ðŸ”„ Checking location updates for ${activeRides.length} rides`
+    );
 
     // Get rides that need updates
     const ridesNeedingUpdates = activeRides.filter((ride) =>
@@ -290,7 +298,7 @@ export default function ActiveRidesScreen({ navigation }) {
     // Start updates ONLY if not already running
     ridesNeedingUpdates.forEach((ride) => {
       if (!RideLocationUpdater.isUpdating(ride.id)) {
-        console.log(`▶️ Starting updates for ${ride.id}`);
+        console.log(`â–¶ï¸ Starting updates for ${ride.id}`);
         RideLocationUpdater.startUpdating(ride.id, ride.status);
       }
     });
@@ -303,7 +311,7 @@ export default function ActiveRidesScreen({ navigation }) {
       await updateRideStatus(rideId, newStatus);
       dispatch(updateLocalRideStatus({ rideId, status: newStatus }));
 
-      // ✅ NEW: Manage location updates based on status
+      // âœ… NEW: Manage location updates based on status
       if (["accepted", "arrived", "in_progress"].includes(newStatus)) {
         RideLocationUpdater.startUpdating(rideId, newStatus);
       } else if (newStatus === "completed" || newStatus === "cancelled") {
@@ -334,7 +342,7 @@ export default function ActiveRidesScreen({ navigation }) {
                 finalFare: ride.estimatedFare || ride.fare,
               });
 
-              // ✅ NEW: Stop location updates
+              // âœ… NEW: Stop location updates
               RideLocationUpdater.stopUpdating(ride.id);
 
               dispatch(addCompletedRide({ ...ride, status: "completed" }));
@@ -369,9 +377,9 @@ export default function ActiveRidesScreen({ navigation }) {
           style: "destructive",
           onPress: async () => {
             try {
-              console.log("🚫 Cancelling ride:", ride.id);
+              console.log("ðŸš« Cancelling ride:", ride.id);
 
-              // ✅ NEW: Stop location updates FIRST
+              // âœ… NEW: Stop location updates FIRST
               RideLocationUpdater.stopUpdating(ride.id);
 
               const result = await updateRideStatus(ride.id, "cancelled", {
@@ -401,7 +409,7 @@ export default function ActiveRidesScreen({ navigation }) {
                 );
               }
             } catch (error) {
-              console.error("❌ Unexpected error cancelling ride:", error);
+              console.error("âŒ Unexpected error cancelling ride:", error);
               dispatch(removeActiveRide(ride.id));
               Alert.alert("Ride Removed", "Removed from your active rides.");
             }
@@ -411,22 +419,12 @@ export default function ActiveRidesScreen({ navigation }) {
     );
   };
 
-  const renderActiveRide = ({ item }) => {
-    return (
-      <RideStatusCard
-        ride={item}
-        onUpdateStatus={handleUpdateStatus}
-        onCompleteRide={handleCompleteRide}
-        onViewDetails={handleViewDetails}
-        onCancelRide={handleCancelRide}
-        driverLocation={driverLocation}
-      />
-    );
-  };
-
   if (activeRides.length === 0) {
     return (
       <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconContainer}>
+          <Text style={styles.emptyIcon}>🚗</Text>
+        </View>
         <Text style={styles.emptyTitle}>No Active Rides</Text>
         <Text style={styles.emptySubtext}>
           Accept a ride request to see it here
@@ -437,13 +435,80 @@ export default function ActiveRidesScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={sortedRides}
-        renderItem={renderActiveRide}
-        keyExtractor={(item) => item.id}
+      <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
-      />
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Immediate Rides Section */}
+        {immediateRides.length > 0 && (
+          <View style={styles.section}>
+            <LinearGradient
+              colors={theme.gradients.primary.colors}
+              start={theme.gradients.primary.start}
+              end={theme.gradients.primary.end}
+              style={styles.sectionHeader}
+            >
+              <Text style={styles.sectionTitle}>Active Now</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{immediateRides.length}</Text>
+              </View>
+            </LinearGradient>
+
+            {immediateRides.map((ride) => (
+              <RideStatusCard
+                key={ride.id}
+                ride={ride}
+                onUpdateStatus={handleUpdateStatus}
+                onCompleteRide={handleCompleteRide}
+                onViewDetails={handleViewDetails}
+                onCancelRide={handleCancelRide}
+                driverLocation={driverLocation}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Scheduled Rides Section */}
+        {scheduledRides.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderScheduled}>
+              <Text style={styles.sectionTitleScheduled}>
+                📅 Scheduled Rides
+              </Text>
+              <View style={styles.badgeScheduled}>
+                <Text style={styles.badgeTextScheduled}>
+                  {scheduledRides.length}
+                </Text>
+              </View>
+            </View>
+
+            {scheduledRides.map((ride) => (
+              <RideStatusCard
+                key={ride.id}
+                ride={ride}
+                onUpdateStatus={handleUpdateStatus}
+                onCompleteRide={handleCompleteRide}
+                onViewDetails={handleViewDetails}
+                onCancelRide={handleCancelRide}
+                driverLocation={driverLocation}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Empty states for each section */}
+        {immediateRides.length === 0 && scheduledRides.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconContainer}>
+              <Text style={styles.emptyIcon}>🚗</Text>
+            </View>
+            <Text style={styles.emptyTitle}>No Active Rides</Text>
+            <Text style={styles.emptySubtext}>
+              Accept a ride request to see it here
+            </Text>
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -451,39 +516,110 @@ export default function ActiveRidesScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: theme.colors.background.primary,
   },
-  listContainer: {
+  scrollContent: {
     padding: 16,
+    paddingBottom: 32,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    ...theme.shadows.md,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  badge: {
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 32,
+    alignItems: "center",
+  },
+  badgeText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#ffffff",
+  },
+  sectionHeaderScheduled: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: "#f0f9ff",
+    borderWidth: 2,
+    borderColor: "#7c3aed",
+  },
+  sectionTitleScheduled: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#7c3aed",
+  },
+  badgeScheduled: {
+    backgroundColor: "#7c3aed",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 32,
+    alignItems: "center",
+  },
+  badgeTextScheduled: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#ffffff",
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 40,
+    minHeight: 400,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: theme.colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  emptyIcon: {
+    fontSize: 48,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1f2937",
+    color: theme.colors.text.primary,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#6b7280",
+    color: theme.colors.text.secondary,
     textAlign: "center",
   },
   rideCard: {
     backgroundColor: "#ffffff",
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    ...theme.shadows.lg,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
+    borderColor: theme.colors.background.border,
     overflow: "hidden",
   },
   statusBadge: {
@@ -499,15 +635,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   scheduledBadge: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#f0f9ff",
     alignItems: "center",
+    borderBottomWidth: 2,
+    borderBottomColor: "#7c3aed",
   },
   scheduledBadgeText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
-    color: "#ffffff",
+    color: "#7c3aed",
   },
   scheduledInfo: {
     backgroundColor: "#f5f3ff",
@@ -523,26 +661,34 @@ const styles = StyleSheet.create({
   },
   liveStatsRow: {
     flexDirection: "row",
-    backgroundColor: "#f0fdf4",
-    padding: 12,
+    backgroundColor: "#ecfdf5",
+    padding: 14,
     justifyContent: "space-around",
+    borderBottomWidth: 1,
+    borderBottomColor: "#d1fae5",
   },
   liveStatMini: {
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 12,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    ...theme.shadows.sm,
   },
   liveStatText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#166534",
+    color: "#065f46",
   },
   passengerSection: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    padding: 18,
     paddingBottom: 12,
+    backgroundColor: "#fafafa",
   },
   passengerInfo: {
     flexDirection: "row",
@@ -550,13 +696,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "#3B82F6",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+    ...theme.shadows.sm,
   },
   avatarText: {
     color: "#ffffff",
@@ -582,9 +729,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   fare: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "800",
     color: "#10B981",
+    textShadowColor: "rgba(16, 185, 129, 0.2)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   routeSection: {
     paddingHorizontal: 16,
@@ -634,25 +784,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
+    ...theme.shadows.md,
   },
   actionButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     color: "#FFFFFF",
   },
   cancelButton: {
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
-    backgroundColor: "#fef2f2",
-    borderWidth: 1,
+    backgroundColor: "#ffffff",
+    borderWidth: 2,
     borderColor: "#fca5a5",
   },
   cancelButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     color: "#dc2626",
   },

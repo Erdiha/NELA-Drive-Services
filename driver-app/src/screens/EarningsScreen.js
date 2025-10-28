@@ -55,7 +55,7 @@ const AnimatedNumber = ({
 };
 
 const EarningsScreen = () => {
-  const { completedRides } = useSelector((state) => state.rides);
+  const { completedRides, rating } = useSelector((state) => state.rides);
   const [selectedPeriod, setSelectedPeriod] = useState("today");
   const [earnings, setEarnings] = useState({
     totalEarnings: "0.00",
@@ -230,7 +230,7 @@ const EarningsScreen = () => {
           </View>
           <View style={styles.performanceRow}>
             <Text style={styles.performanceLabel}>Rating</Text>
-            <Text style={styles.performanceValue}>â­ 5.0</Text>
+            <Text style={styles.performanceValue}>★ {rating.average}</Text>
           </View>
         </View>
       </View>
