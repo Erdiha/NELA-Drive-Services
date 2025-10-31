@@ -11,6 +11,8 @@ import {
   Platform,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
+import { LinearGradient } from "expo-linear-gradient";
+import theme from "../theme/theme";
 import { updateRideStatus } from "../services/rideService";
 import {
   updateRideStatus as updateLocalRideStatus,
@@ -95,29 +97,25 @@ const RideDetailsScreen = ({ route, navigation }) => {
     switch (status) {
       case "accepted":
         return {
-          title: "Heading to Pickup",
-          color: "#3B82F6",
-          nextAction: "Mark as Arrived",
+          title: "🚗 Heading to Pickup",
+          nextAction: "✓ Mark as Arrived",
           nextStatus: "arrived",
         };
       case "arrived":
         return {
-          title: "Arrived at Pickup",
-          color: "#F59E0B",
-          nextAction: "Start Trip",
+          title: "📍 Arrived at Pickup",
+          nextAction: "▶ Start Trip",
           nextStatus: "in_progress",
         };
       case "in_progress":
         return {
-          title: "Trip in Progress",
-          color: "#10B981",
-          nextAction: "Complete Trip",
+          title: "🛣️ Trip in Progress",
+          nextAction: "🏁 Complete Trip",
           nextStatus: "completed",
         };
       default:
         return {
           title: "Unknown Status",
-          color: "#6B7280",
           nextAction: null,
           nextStatus: null,
         };
@@ -320,53 +318,80 @@ const RideDetailsScreen = ({ route, navigation }) => {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
+        {/* Status Header with Gradient */}
         <View
           style={[styles.statusHeader, { backgroundColor: statusInfo.color }]}
         >
-          <Text style={styles.statusTitle}>{statusInfo.title}</Text>
-          {ride.status === "in_progress" && (
-            <Text style={styles.timerText}>⏱️ {elapsedTime}</Text>
-          )}
+          <View style={styles.statusContent}>
+            <Text style={styles.statusTitle}>{statusInfo.title}</Text>
+            {ride.status === "in_progress" && (
+              <View style={styles.timerBadge}>
+                <Text style={styles.timerText}>⏱️ {elapsedTime}</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.fareHeader}>
+            <Text style={styles.fareLabel}>Trip Fare</Text>
+            <Text style={styles.fareAmount}>
+              ${ride.estimatedFare || ride.fare}
+            </Text>
+          </View>
         </View>
-
+        {/* Live Stats Card */}
         {(ride.status === "accepted" || ride.status === "in_progress") &&
           distanceToDestination && (
-            <View style={styles.liveStatsCard}>
+            <LinearGradient
+              colors={["#ecfdf5", "#d1fae5"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.liveStatsCard}
+            >
               <View style={styles.liveStatItem}>
-                <Text style={styles.liveStatIcon}>📍</Text>
+                <View style={styles.statIconCircle}>
+                  <Text style={styles.liveStatIcon}>📍</Text>
+                </View>
                 <View>
                   <Text style={styles.liveStatValue}>
                     {distanceToDestination}
                   </Text>
-                  <Text style={styles.liveStatLabel}>miles</Text>
+                  <Text style={styles.liveStatLabel}>miles away</Text>
                 </View>
               </View>
               <View style={styles.liveStatDivider} />
               <View style={styles.liveStatItem}>
-                <Text style={styles.liveStatIcon}>⏱️</Text>
+                <View style={styles.statIconCircle}>
+                  <Text style={styles.liveStatIcon}>⏱️</Text>
+                </View>
                 <View>
                   <Text style={styles.liveStatValue}>{etaMinutes}</Text>
                   <Text style={styles.liveStatLabel}>minutes</Text>
                 </View>
               </View>
-            </View>
+            </LinearGradient>
           )}
 
+        {/* Primary Action Button */}
         {statusInfo.nextAction && (
           <TouchableOpacity
-            style={[
-              styles.primaryActionButton,
-              { backgroundColor: statusInfo.color },
-            ]}
+            style={styles.primaryActionWrapper}
             onPress={() => handleStatusUpdate(statusInfo.nextStatus)}
             disabled={loading}
+            activeOpacity={0.8}
           >
-            <Text style={styles.primaryActionText}>
-              {loading ? "Updating..." : statusInfo.nextAction}
-            </Text>
+            <LinearGradient
+              colors={theme.gradients.primary.colors}
+              start={theme.gradients.primary.start}
+              end={theme.gradients.primary.end}
+              style={styles.primaryActionButton}
+            >
+              <Text style={styles.primaryActionText}>
+                {loading ? "Updating..." : statusInfo.nextAction}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
         )}
 
+        {/* Quick Actions Row */}
         <View style={styles.quickActionsRow}>
           <TouchableOpacity style={styles.quickAction} onPress={openNavigation}>
             <Text style={styles.quickActionIcon}>🧭</Text>
@@ -384,77 +409,139 @@ const RideDetailsScreen = ({ route, navigation }) => {
             style={[styles.quickAction, styles.cancelAction]}
             onPress={handleCancelRide}
           >
-            <Text style={styles.quickActionIcon}>❌</Text>
+            <Text style={styles.quickActionIcon}>✕</Text>
             <Text style={[styles.quickActionText, styles.cancelText]}>
               Cancel
             </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.compactCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Passenger</Text>
-            <View style={styles.ratingBadge}>
-              <Text style={styles.star}>⭐</Text>
-              <Text style={styles.ratingText}>
-                {ride.passengerRating || 5.0}
-              </Text>
+        {/* Passenger Card */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.gradientBorder}>
+            <View style={styles.compactCard}>
+              <Text style={styles.sectionTitle}>👤 PASSENGER</Text>
+              <View style={styles.passengerRow}>
+                <LinearGradient
+                  colors={theme.gradients.primary.colors}
+                  start={theme.gradients.primary.start}
+                  end={theme.gradients.primary.end}
+                  style={styles.avatar}
+                >
+                  <Text style={styles.avatarText}>
+                    {(ride.passengerName || "A").charAt(0).toUpperCase()}
+                  </Text>
+                </LinearGradient>
+                <View style={styles.passengerDetails}>
+                  <Text style={styles.passengerNameCompact}>
+                    {ride.passengerName || "Anonymous"}
+                  </Text>
+                  <View style={styles.ratingBadge}>
+                    <Text style={styles.star}>⭐</Text>
+                    <Text style={styles.ratingText}>
+                      {ride.passengerRating || 5.0}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Contact Info in Same Card */}
+              <View style={styles.divider} />
+              <View style={styles.contactSection}>
+                <View style={styles.contactRow}>
+                  <Text style={styles.contactIcon}>📞</Text>
+                  <Text style={styles.contactValue}>
+                    {ride.customerPhone ||
+                      ride.passengerPhone ||
+                      "Not provided"}
+                  </Text>
+                </View>
+                {(ride.customerEmail || ride.passengerEmail) && (
+                  <View style={styles.contactRow}>
+                    <Text style={styles.contactIcon}>📧</Text>
+                    <Text style={styles.contactValue} numberOfLines={1}>
+                      {ride.customerEmail || ride.passengerEmail}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-          <Text style={styles.passengerNameCompact}>
-            {ride.passengerName || "Anonymous"}
-          </Text>
-        </View>
-        {/* Customer Contact Info */}
-        <View style={styles.compactCard}>
-          <Text style={styles.cardTitle}>Contact</Text>
-          <View style={styles.contactRow}>
-            <Text style={styles.contactLabel}>📞 Phone:</Text>
-            <Text style={styles.contactValue}>
-              {ride.customerPhone || ride.passengerPhone || "Not provided"}
-            </Text>
-          </View>
-          {(ride.customerEmail || ride.passengerEmail) && (
-            <View style={styles.contactRow}>
-              <Text style={styles.contactLabel}>📧 Email:</Text>
-              <Text style={styles.contactValue} numberOfLines={1}>
-                {ride.customerEmail || ride.passengerEmail}
-              </Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.compactCard}>
-          <Text style={styles.cardTitle}>Route</Text>
-          <View style={styles.compactLocationRow}>
-            <View style={styles.pickupDotSmall} />
-            <Text style={styles.compactLocationText} numberOfLines={1}>
-              {ride.pickup?.address || ride.pickupLocation}
-            </Text>
-          </View>
-          <View style={styles.compactRouteLine} />
-          <View style={styles.compactLocationRow}>
-            <View style={styles.destinationDotSmall} />
-            <Text style={styles.compactLocationText} numberOfLines={1}>
-              {ride.dropoff?.address || ride.destination}
-            </Text>
           </View>
         </View>
 
+        {/* Route Card */}
+        <View style={styles.sectionContainer}>
+          <LinearGradient
+            colors={["#faf5ff", "#f3e8ff"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.routeCard}
+          >
+            <Text style={styles.sectionTitle}>🗺️ ROUTE</Text>
+            <View style={styles.routeContent}>
+              <View style={styles.compactLocationRow}>
+                <LinearGradient
+                  colors={["#10B981", "#059669"]}
+                  style={styles.pickupDotLarge}
+                >
+                  <Text style={styles.dotText}>A</Text>
+                </LinearGradient>
+                <View style={styles.locationInfo}>
+                  <Text style={styles.locationLabel}>PICKUP</Text>
+                  <Text style={styles.compactLocationText} numberOfLines={2}>
+                    {ride.pickup?.address || ride.pickupLocation}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.compactRouteLine} />
+              <View style={styles.compactLocationRow}>
+                <LinearGradient
+                  colors={["#EF4444", "#DC2626"]}
+                  style={styles.destinationDotLarge}
+                >
+                  <Text style={styles.dotText}>B</Text>
+                </LinearGradient>
+                <View style={styles.locationInfo}>
+                  <Text style={styles.locationLabel}>DROPOFF</Text>
+                  <Text style={styles.compactLocationText} numberOfLines={2}>
+                    {ride.dropoff?.address || ride.destination}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* Trip Info Grid */}
         <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Distance</Text>
+          <LinearGradient
+            colors={["#dbeafe", "#bfdbfe"]}
+            style={styles.infoItem}
+          >
+            <Text style={styles.infoIcon}>📏</Text>
             <Text style={styles.infoValue}>{ride.distance || "N/A"}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Duration</Text>
+            <Text style={styles.infoLabel}>Distance</Text>
+          </LinearGradient>
+
+          <LinearGradient
+            colors={["#fef3c7", "#fde68a"]}
+            style={styles.infoItem}
+          >
+            <Text style={styles.infoIcon}>⏱️</Text>
             <Text style={styles.infoValue}>{ride.estimatedTime || "N/A"}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Fare</Text>
+            <Text style={styles.infoLabel}>Duration</Text>
+          </LinearGradient>
+
+          <LinearGradient
+            colors={["#d1fae5", "#a7f3d0"]}
+            style={styles.infoItem}
+          >
+            <Text style={styles.infoIcon}>💵</Text>
             <Text style={styles.infoValue}>
               ${ride.estimatedFare || ride.fare}
             </Text>
-          </View>
+            <Text style={styles.infoLabel}>Fare</Text>
+          </LinearGradient>
         </View>
 
         <View style={{ height: 20 }} />
@@ -483,7 +570,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: theme.colors.primary.main,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -493,81 +580,112 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+
+  // Status Header
   statusHeader: {
-    padding: 20,
-    paddingBottom: 18,
+    padding: 24,
+    paddingBottom: 20,
+  },
+  statusContent: {
     alignItems: "center",
+    marginBottom: 16,
   },
   statusTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#1f2937",
+    marginBottom: 8,
+  },
+  timerBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   timerText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#ffffff",
-    marginTop: 6,
-    opacity: 0.95,
+    color: "#1f2937",
   },
+  fareHeader: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  fareLabel: {
+    fontSize: 18,
+    color: "#374151",
+  },
+  fareAmount: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#1f2937",
+  },
+
+  // Live Stats Card
   liveStatsCard: {
-    backgroundColor: "#10b981",
     margin: 16,
     marginTop: 8,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
   },
   liveStatItem: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
     justifyContent: "center",
+    gap: 12,
+  },
+  statIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
   },
   liveStatIcon: {
-    fontSize: 28,
-    marginRight: 8,
+    fontSize: 24,
   },
   liveStatLabel: {
     fontSize: 11,
-    color: "#ffffff",
-    opacity: 0.85,
+    color: "#065f46",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   liveStatValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#ffffff",
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#065f46",
   },
   liveStatDivider: {
-    width: 1,
-    height: 35,
-    backgroundColor: "#ffffff",
-    opacity: 0.3,
+    width: 2,
+    height: 50,
+    backgroundColor: "#a7f3d0",
     marginHorizontal: 12,
   },
-  primaryActionButton: {
+
+  // Action Buttons
+  primaryActionWrapper: {
     margin: 16,
     marginTop: 8,
-    padding: 18,
     borderRadius: 12,
+    overflow: "hidden",
+  },
+  primaryActionButton: {
+    padding: 18,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
   },
   primaryActionText: {
     color: "#ffffff",
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   quickActionsRow: {
     flexDirection: "row",
@@ -578,14 +696,11 @@ const styles = StyleSheet.create({
   quickAction: {
     flex: 1,
     backgroundColor: "#ffffff",
-    padding: 12,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 12,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 2,
+    borderColor: theme.colors.background.border,
   },
   quickActionIcon: {
     fontSize: 24,
@@ -593,141 +708,232 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#374151",
+    fontWeight: "700",
+    color: theme.colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   cancelAction: {
     backgroundColor: "#fef2f2",
+    borderColor: "#fca5a5",
   },
   cancelText: {
     color: "#dc2626",
   },
+
+  // Section Containers
+  sectionContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: theme.colors.text.primary,
+    marginBottom: 16,
+    letterSpacing: 1,
+  },
+  gradientBorder: {
+    padding: 2,
+    borderRadius: 16,
+    background: "linear-gradient(135deg, #7c3aed, #f59e0b)",
+  },
+
+  // Cards
   compactCard: {
     backgroundColor: "#ffffff",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    padding: 20,
+    borderRadius: 14,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   cardTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#6b7280",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: "700",
+    color: theme.colors.text.tertiary,
+    letterSpacing: 1,
+  },
+
+  // Passenger Section
+  passengerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarText: {
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  passengerDetails: {
+    flex: 1,
+  },
+  passengerNameCompact: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: theme.colors.text.primary,
+    marginBottom: 6,
   },
   ratingBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fef3c7",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    alignSelf: "flex-start",
   },
   star: {
-    fontSize: 12,
-    marginRight: 3,
+    fontSize: 14,
+    marginRight: 4,
   },
   ratingText: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     color: "#92400e",
   },
-  passengerNameCompact: {
+
+  // Contact Section
+  divider: {
+    height: 1,
+    backgroundColor: theme.colors.neutral[200],
+    marginVertical: 16,
+  },
+  contactSection: {
+    gap: 10,
+  },
+  contactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  contactIcon: {
     fontSize: 18,
+  },
+  contactLabel: {
+    fontSize: 14,
+    color: theme.colors.text.secondary,
+    fontWeight: "500",
+  },
+  contactValue: {
+    fontSize: 15,
+    color: theme.colors.text.primary,
     fontWeight: "600",
-    color: "#1f2937",
+    flex: 1,
+  },
+
+  // Route Card
+  routeCard: {
+    padding: 20,
+    borderRadius: 16,
+  },
+  routeContent: {
+    backgroundColor: "#ffffff",
+    padding: 16,
+    borderRadius: 12,
   },
   compactLocationRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    gap: 14,
+  },
+  pickupDotLarge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  destinationDotLarge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dotText: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#ffffff",
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 10,
+    color: theme.colors.text.tertiary,
+    fontWeight: "700",
+    marginBottom: 4,
+    letterSpacing: 1,
+  },
+  compactLocationText: {
+    fontSize: 15,
+    color: theme.colors.text.primary,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  compactRouteLine: {
+    width: 3,
+    height: 20,
+    backgroundColor: theme.colors.neutral[300],
+    marginLeft: 19,
+    marginVertical: 8,
+    borderRadius: 2,
   },
   pickupDotSmall: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: "#10B981",
     marginRight: 10,
   },
   destinationDotSmall: {
-    width: 8,
-    height: 8,
+    width: 10,
+    height: 10,
     borderRadius: 1,
     backgroundColor: "#EF4444",
     marginRight: 10,
   },
-  compactRouteLine: {
-    width: 1,
-    height: 12,
-    backgroundColor: "#e5e7eb",
-    marginLeft: 3,
-    marginVertical: 2,
-  },
-  compactLocationText: {
-    fontSize: 14,
-    color: "#374151",
-    flex: 1,
-  },
+
+  // Info Grid
   infoGrid: {
     flexDirection: "row",
     marginHorizontal: 16,
     marginBottom: 16,
-    gap: 8,
+    gap: 10,
   },
   infoItem: {
     flex: 1,
-    backgroundColor: "#ffffff",
-    padding: 12,
-    borderRadius: 10,
+    padding: 18,
+    borderRadius: 16,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    gap: 8,
+  },
+  infoIcon: {
+    fontSize: 28,
   },
   infoLabel: {
     fontSize: 11,
-    color: "#6b7280",
-    marginBottom: 4,
+    color: theme.colors.text.secondary,
+    fontWeight: "700",
+    letterSpacing: 0.5,
     textTransform: "uppercase",
-    fontWeight: "600",
   },
   infoValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1f2937",
-  },
-  contactRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginVertical: 4,
-  },
-  contactLabel: {
-    fontSize: 13,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  contactValue: {
-    fontSize: 13,
-    color: "#1f2937",
-    fontWeight: "600",
-    flex: 1,
-    textAlign: "right",
-    marginLeft: 8,
+    fontSize: 20,
+    fontWeight: "800",
+    color: theme.colors.text.primary,
   },
 });
 

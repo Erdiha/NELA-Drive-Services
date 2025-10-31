@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Nela",
+    "name": "NELA Driver",
     "slug": "driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo_round.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/logo.png",
+      "image": "./assets/logo_round.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -22,11 +22,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo_round.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.nelarides",
-      "googleServicesFile": "./google-services.json",
+      "package": "com.erdiha.driverapp",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",

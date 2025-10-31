@@ -391,17 +391,53 @@ function DashboardStack() {
       <Stack.Screen
         name="RideDetails"
         component={RideDetailsScreen}
-        options={{
+        options={({ navigation }) => ({
           headerShown: true,
-          title: "Ride Details",
           headerStyle: {
-            backgroundColor: "#475569",
+            backgroundColor: "transparent",
+            elevation: 0,
+            shadowOpacity: 0,
           },
-          headerTintColor: "#fff",
-          headerTitleStyle: {
-            fontWeight: "600",
-          },
-        }}
+          header: ({ navigation }) => (
+            <LinearGradient
+              colors={theme.gradients.primary.colors}
+              start={theme.gradients.primary.start}
+              end={theme.gradients.primary.end}
+              style={{
+                paddingTop: 15,
+                paddingBottom: 16,
+                paddingHorizontal: 16,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <TouchableOpacity
+                  onPress={() => navigation.goBack()}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text
+                    style={{
+                      color: "#ffffff",
+                      fontSize: 20,
+                      fontWeight: "700",
+                      marginRight: 12,
+                    }}
+                  >
+                    ‹
+                  </Text>
+                </TouchableOpacity>
+                <Text
+                  style={{
+                    color: "#ffffff",
+                    fontSize: 20,
+                    fontWeight: "700",
+                  }}
+                >
+                  Ride Details
+                </Text>
+              </View>
+            </LinearGradient>
+          ),
+        })}
       />
     </Stack.Navigator>
   );
@@ -414,17 +450,53 @@ function ActiveRidesStack() {
       <Stack.Screen
         name="RideDetails"
         component={RideDetailsScreen}
-        options={{
+        options={({ navigation }) => ({
           headerShown: true,
-          title: "Ride Details",
           headerStyle: {
-            backgroundColor: "#475569",
+            backgroundColor: "transparent",
+            elevation: 0,
+            shadowOpacity: 0,
           },
-          headerTintColor: "#fff",
-          headerTitleStyle: {
-            fontWeight: "600",
-          },
-        }}
+          header: ({ navigation }) => (
+            <LinearGradient
+              colors={theme.gradients.primary.colors}
+              start={theme.gradients.primary.start}
+              end={theme.gradients.primary.end}
+              style={{
+                paddingTop: 15,
+                paddingBottom: 16,
+                paddingHorizontal: 16,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <TouchableOpacity
+                  onPress={() => navigation.goBack()}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text
+                    style={{
+                      color: "#ffffff",
+                      fontSize: 20,
+                      fontWeight: "700",
+                      marginRight: 12,
+                    }}
+                  >
+                    ‹
+                  </Text>
+                </TouchableOpacity>
+                <Text
+                  style={{
+                    color: "#ffffff",
+                    fontSize: 20,
+                    fontWeight: "700",
+                  }}
+                >
+                  Ride Details
+                </Text>
+              </View>
+            </LinearGradient>
+          ),
+        })}
       />
     </Stack.Navigator>
   );
@@ -519,8 +591,9 @@ function TabNavigator() {
               height: 70,
               paddingBottom: 10,
               paddingTop: 8,
-              ...theme.shadows.lg,
               borderTopWidth: 0,
+              elevation: 0,
+              shadowOpacity: 0,
             },
             tabBarLabelStyle: {
               fontSize: 12,
@@ -616,8 +689,9 @@ function TabNavigator() {
             height: 70,
             paddingBottom: 10,
             paddingTop: 8,
-            ...theme.shadows.lg,
             borderTopWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
           },
           tabBarLabelStyle: {
             fontSize: 11,

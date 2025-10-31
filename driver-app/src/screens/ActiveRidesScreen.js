@@ -19,7 +19,7 @@ import {
   updateRideStatus as updateLocalRideStatus,
 } from "../store/store";
 import LocationService from "../services/locationService";
-import RideLocationUpdater from "../services/rideLocationUpdater"; // âœ… NEW
+import RideLocationUpdater from "../services/rideLocationUpdater";
 
 const RideStatusCard = ({
   ride,
@@ -72,99 +72,105 @@ const RideStatusCard = ({
     return () => clearInterval(interval);
   }, [ride, driverLocation, isScheduled]);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "accepted":
-        return "#3B82F6";
-      case "arrived":
-        return "#F59E0B";
-      case "in_progress":
-        return "#10B981";
-      case "completed":
-        return "#6B7280";
-      default:
-        return "#6B7280";
-    }
-  };
-
   const getStatusText = (status) => {
     switch (status) {
       case "accepted":
-        return "Heading to pickup";
+        return "🚗 Heading to Pickup";
       case "arrived":
-        return "Arrived at pickup";
+        return "📍 Arrived at Pickup";
       case "in_progress":
-        return "Trip in progress";
-      case "completed":
-        return "Trip completed";
+        return "🛣️ Trip in Progress";
       default:
-        return "Unknown status";
+        return "Unknown";
     }
   };
 
   const getNextAction = (status) => {
     switch (status) {
       case "accepted":
-        return { text: "Arrived", nextStatus: "arrived" };
+        return { text: "✓ Arrived", nextStatus: "arrived" };
       case "arrived":
-        return { text: "Start Trip", nextStatus: "in_progress" };
+        return { text: "▶ Start Trip", nextStatus: "in_progress" };
       case "in_progress":
-        return { text: "Complete", nextStatus: "completed" };
+        return { text: "🏁 Complete", nextStatus: "completed" };
       default:
         return null;
     }
   };
 
   const nextAction = getNextAction(ride.status);
-  const statusColor = getStatusColor(ride.status);
   const statusText = getStatusText(ride.status);
 
   return (
     <View style={styles.rideCard}>
-      <TouchableOpacity onPress={() => onViewDetails(ride)} activeOpacity={1}>
+      <TouchableOpacity
+        onPress={() => onViewDetails(ride)}
+        activeOpacity={0.95}
+      >
+        {/* Status Header with Gradient */}
         {isScheduled ? (
-          <View style={styles.scheduledBadge}>
+          <LinearGradient
+            colors={theme.gradients.primary.colors}
+            start={theme.gradients.primary.start}
+            end={theme.gradients.primary.end}
+            style={styles.scheduledBadge}
+          >
             <Text style={styles.scheduledBadgeText}>
-              {`Scheduled for ${scheduledTime.toLocaleString("en-US", {
+              📅{" "}
+              {scheduledTime.toLocaleString("en-US", {
                 month: "short",
                 day: "numeric",
                 hour: "numeric",
                 minute: "2-digit",
-              })}`}
+              })}
             </Text>
-          </View>
+          </LinearGradient>
         ) : (
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+          <LinearGradient
+            colors={theme.gradients.primary.colors}
+            start={theme.gradients.primary.start}
+            end={theme.gradients.primary.end}
+            style={styles.statusBadge}
+          >
             <Text style={styles.statusBadgeText}>{statusText}</Text>
-          </View>
+          </LinearGradient>
         )}
 
+        {/* Live Stats (ETA & Distance) */}
         {!isScheduled &&
         (ride.status === "accepted" || ride.status === "in_progress") &&
         liveETA ? (
           <View style={styles.liveStatsRow}>
             <View style={styles.liveStatMini}>
-              <Text style={styles.liveStatText}>{`${liveDistance} mi`}</Text>
+              <Text style={styles.liveStatIcon}>📍</Text>
+              <Text style={styles.liveStatText}>{liveDistance} mi</Text>
             </View>
             <View style={styles.liveStatMini}>
-              <Text style={styles.liveStatText}>{`${liveETA} min`}</Text>
+              <Text style={styles.liveStatIcon}>⏱</Text>
+              <Text style={styles.liveStatText}>{liveETA} min</Text>
             </View>
           </View>
         ) : null}
 
+        {/* Passenger Section */}
         <View style={styles.passengerSection}>
           <View style={styles.passengerInfo}>
-            <View style={styles.avatar}>
+            <LinearGradient
+              colors={theme.gradients.primary.colors}
+              start={theme.gradients.primary.start}
+              end={theme.gradients.primary.end}
+              style={styles.avatar}
+            >
               <Text style={styles.avatarText}>
                 {(ride.passengerName || "A").charAt(0).toUpperCase()}
               </Text>
-            </View>
+            </LinearGradient>
             <View style={styles.passengerDetails}>
               <Text style={styles.passengerName}>
                 {ride.passengerName || "Anonymous"}
               </Text>
               <View style={styles.ratingRow}>
-                <Text style={styles.ratingStar}>â­</Text>
+                <Text style={styles.ratingStar}>⭐</Text>
                 <Text style={styles.rating}>
                   {ride.passengerRating
                     ? ride.passengerRating.toFixed(1)
@@ -174,10 +180,11 @@ const RideStatusCard = ({
             </View>
           </View>
           <Text style={styles.fare}>
-            {`${ride.estimatedFare || ride.fare || 0}`}
+            ${ride.estimatedFare || ride.fare || 0}
           </Text>
         </View>
 
+        {/* Route Section */}
         <View style={styles.routeSection}>
           <View style={styles.routeRow}>
             <View style={styles.pickupDot} />
@@ -195,58 +202,50 @@ const RideStatusCard = ({
         </View>
       </TouchableOpacity>
 
+      {/* Action Buttons */}
       <View style={styles.actionSection}>
         <View style={styles.actionButtonRow}>
           {!isScheduled && nextAction ? (
-            <Pressable
-              style={({ pressed }) => [
-                styles.actionButton,
-                {
-                  backgroundColor: statusColor,
-                  flex: 2,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-              onPress={() => {
-                if (nextAction.nextStatus === "completed") {
-                  onCompleteRide(ride);
-                } else {
-                  onUpdateStatus(ride.id, nextAction.nextStatus);
-                }
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            <>
+              <TouchableOpacity
+                style={styles.actionButtonWrapper}
+                onPress={() => {
+                  if (nextAction.nextStatus === "completed") {
+                    onCompleteRide(ride);
+                  } else {
+                    onUpdateStatus(ride.id, nextAction.nextStatus);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={theme.gradients.primary.colors}
+                  start={theme.gradients.primary.start}
+                  end={theme.gradients.primary.end}
+                  style={styles.actionButton}
+                >
+                  <Text style={styles.actionButtonText}>{nextAction.text}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => onCancelRide(ride)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelButtonText}>✕</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={styles.cancelButtonFull}
+              onPress={() => onCancelRide(ride)}
+              activeOpacity={0.7}
             >
-              <Text style={styles.actionButtonText}>{nextAction.text}</Text>
-            </Pressable>
-          ) : null}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.cancelButton,
-              {
-                flex: nextAction ? 1 : 1,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
-            onPress={() => {
-              onCancelRide(ride);
-            }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </Pressable>
+              <Text style={styles.cancelButtonText}>Cancel Ride</Text>
+            </TouchableOpacity>
+          )}
         </View>
-
-        {isScheduled ? (
-          <View style={styles.scheduledInfo}>
-            <Text style={styles.scheduledInfoText}>
-              {`Pickup time: ${scheduledTime.toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-              })}`}
-            </Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -277,7 +276,6 @@ export default function ActiveRidesScreen({ navigation }) {
       return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
     });
 
-  // âœ… FIXED: Manage location updates - use useMemo for stable dependency
   const activeRideStates = React.useMemo(() => {
     return activeRides
       .map((r) => `${r.id}:${r.status}`)
@@ -286,24 +284,15 @@ export default function ActiveRidesScreen({ navigation }) {
   }, [activeRides]);
 
   useEffect(() => {
-    console.log(
-      `ðŸ”„ Checking location updates for ${activeRides.length} rides`
-    );
-
-    // Get rides that need updates
     const ridesNeedingUpdates = activeRides.filter((ride) =>
       ["accepted", "arrived", "in_progress"].includes(ride.status)
     );
 
-    // Start updates ONLY if not already running
     ridesNeedingUpdates.forEach((ride) => {
       if (!RideLocationUpdater.isUpdating(ride.id)) {
-        console.log(`â–¶ï¸ Starting updates for ${ride.id}`);
         RideLocationUpdater.startUpdating(ride.id, ride.status);
       }
     });
-
-    // Don't cleanup on every render - handled in status change handlers
   }, [activeRideStates]);
 
   const handleUpdateStatus = async (rideId, newStatus) => {
@@ -311,7 +300,6 @@ export default function ActiveRidesScreen({ navigation }) {
       await updateRideStatus(rideId, newStatus);
       dispatch(updateLocalRideStatus({ rideId, status: newStatus }));
 
-      // âœ… NEW: Manage location updates based on status
       if (["accepted", "arrived", "in_progress"].includes(newStatus)) {
         RideLocationUpdater.startUpdating(rideId, newStatus);
       } else if (newStatus === "completed" || newStatus === "cancelled") {
@@ -342,7 +330,6 @@ export default function ActiveRidesScreen({ navigation }) {
                 finalFare: ride.estimatedFare || ride.fare,
               });
 
-              // âœ… NEW: Stop location updates
               RideLocationUpdater.stopUpdating(ride.id);
 
               dispatch(addCompletedRide({ ...ride, status: "completed" }));
@@ -377,9 +364,6 @@ export default function ActiveRidesScreen({ navigation }) {
           style: "destructive",
           onPress: async () => {
             try {
-              console.log("ðŸš« Cancelling ride:", ride.id);
-
-              // âœ… NEW: Stop location updates FIRST
               RideLocationUpdater.stopUpdating(ride.id);
 
               const result = await updateRideStatus(ride.id, "cancelled", {
@@ -409,7 +393,7 @@ export default function ActiveRidesScreen({ navigation }) {
                 );
               }
             } catch (error) {
-              console.error("âŒ Unexpected error cancelling ride:", error);
+              console.error("Unexpected error cancelling ride:", error);
               dispatch(removeActiveRide(ride.id));
               Alert.alert("Ride Removed", "Removed from your active rides.");
             }
@@ -448,7 +432,7 @@ export default function ActiveRidesScreen({ navigation }) {
               end={theme.gradients.primary.end}
               style={styles.sectionHeader}
             >
-              <Text style={styles.sectionTitle}>Active Now</Text>
+              <Text style={styles.sectionTitle}>🔥 Active Now</Text>
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{immediateRides.length}</Text>
               </View>
@@ -471,7 +455,10 @@ export default function ActiveRidesScreen({ navigation }) {
         {/* Scheduled Rides Section */}
         {scheduledRides.length > 0 && (
           <View style={styles.section}>
-            <View style={styles.sectionHeaderScheduled}>
+            <LinearGradient
+              colors={["#f0f9ff", "#e0f2fe"]}
+              style={styles.sectionHeaderScheduled}
+            >
               <Text style={styles.sectionTitleScheduled}>
                 📅 Scheduled Rides
               </Text>
@@ -480,7 +467,7 @@ export default function ActiveRidesScreen({ navigation }) {
                   {scheduledRides.length}
                 </Text>
               </View>
-            </View>
+            </LinearGradient>
 
             {scheduledRides.map((ride) => (
               <RideStatusCard
@@ -493,19 +480,6 @@ export default function ActiveRidesScreen({ navigation }) {
                 driverLocation={driverLocation}
               />
             ))}
-          </View>
-        )}
-
-        {/* Empty states for each section */}
-        {immediateRides.length === 0 && scheduledRides.length === 0 && (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <Text style={styles.emptyIcon}>🚗</Text>
-            </View>
-            <Text style={styles.emptyTitle}>No Active Rides</Text>
-            <Text style={styles.emptySubtext}>
-              Accept a ride request to see it here
-            </Text>
           </View>
         )}
       </ScrollView>
@@ -530,14 +504,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
     marginBottom: 12,
-    ...theme.shadows.md,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#ffffff",
   },
   badge: {
@@ -558,16 +531,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
     marginBottom: 12,
-    backgroundColor: "#f0f9ff",
     borderWidth: 2,
     borderColor: "#7c3aed",
   },
   sectionTitleScheduled: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#7c3aed",
   },
   badgeScheduled: {
@@ -588,7 +560,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 40,
-    minHeight: 400,
   },
   emptyIconContainer: {
     width: 100,
@@ -617,52 +588,35 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderRadius: 16,
     marginBottom: 12,
-    ...theme.shadows.lg,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: theme.colors.background.border,
-    overflow: "hidden",
   },
   statusBadge: {
-    paddingVertical: 8,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: "center",
   },
   statusBadgeText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
     color: "#ffffff",
-    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   scheduledBadge: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "#f0f9ff",
     alignItems: "center",
-    borderBottomWidth: 2,
-    borderBottomColor: "#7c3aed",
   },
   scheduledBadgeText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#7c3aed",
-  },
-  scheduledInfo: {
-    backgroundColor: "#f5f3ff",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  scheduledInfoText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#7c3aed",
+    color: "#ffffff",
   },
   liveStatsRow: {
     flexDirection: "row",
     backgroundColor: "#ecfdf5",
-    padding: 14,
+    padding: 12,
     justifyContent: "space-around",
     borderBottomWidth: 1,
     borderBottomColor: "#d1fae5",
@@ -670,15 +624,17 @@ const styles = StyleSheet.create({
   liveStatMini: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 12,
     backgroundColor: "#ffffff",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
-    ...theme.shadows.sm,
+    gap: 6,
+  },
+  liveStatIcon: {
+    fontSize: 16,
   },
   liveStatText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     color: "#065f46",
   },
@@ -686,8 +642,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 18,
-    paddingBottom: 12,
+    padding: 16,
     backgroundColor: "#fafafa",
   },
   passengerInfo: {
@@ -696,18 +651,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#3B82F6",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
-    ...theme.shadows.sm,
   },
   avatarText: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
   },
   passengerDetails: {
@@ -732,9 +685,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
     color: "#10B981",
-    textShadowColor: "rgba(16, 185, 129, 0.2)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   routeSection: {
     paddingHorizontal: 16,
@@ -746,15 +696,15 @@ const styles = StyleSheet.create({
     marginVertical: 3,
   },
   pickupDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: "#10B981",
     marginRight: 10,
   },
   destinationDot: {
-    width: 8,
-    height: 8,
+    width: 10,
+    height: 10,
     borderRadius: 1,
     backgroundColor: "#EF4444",
     marginRight: 10,
@@ -764,14 +714,14 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   routeLine: {
-    width: 1,
+    width: 2,
     height: 12,
     backgroundColor: "#e5e7eb",
-    marginLeft: 3,
+    marginLeft: 4,
     marginVertical: 2,
   },
   routeText: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#374151",
     flex: 1,
   },
@@ -783,11 +733,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  actionButton: {
-    paddingVertical: 14,
+  actionButtonWrapper: {
+    flex: 1,
     borderRadius: 10,
+    overflow: "hidden",
+  },
+  actionButton: {
+    paddingVertical: 18,
     alignItems: "center",
-    ...theme.shadows.md,
   },
   actionButtonText: {
     fontSize: 16,
@@ -795,6 +748,16 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   cancelButton: {
+    width: 60,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderWidth: 2,
+    borderColor: "#fca5a5",
+  },
+  cancelButtonFull: {
+    flex: 1,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
@@ -803,7 +766,7 @@ const styles = StyleSheet.create({
     borderColor: "#fca5a5",
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
     color: "#dc2626",
   },
