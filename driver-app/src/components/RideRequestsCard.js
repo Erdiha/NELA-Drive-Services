@@ -53,7 +53,9 @@ const RideRequestCard = ({
 
   useEffect(() => {
     // Play notification sound (bypasses silent mode) - LOOPS
-    SoundService.playRideRequestSound();
+    setTimeout(() => {
+      SoundService.playRideRequestSound();
+    }, 0);
 
     // Vibrate pattern: [delay, vibrate, pause, vibrate, pause, vibrate]
     Vibration.vibrate([0, 100, 50, 100, 50, 100]);

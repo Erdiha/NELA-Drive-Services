@@ -13,28 +13,38 @@
     },
     "ios": {
       "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyAFhis3Ivs_yx5gi-Elk4Rt0Apr9LSBxfQ"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We need your location to show customers where you are and navigate to pickups.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "We need background location to update your position while driving to pickups.",
         "NSCameraUsageDescription": "Upload profile and vehicle photos",
         "NSPhotoLibraryUsageDescription": "Select photos from your library"
-      }
+      },
+      "bundleIdentifier": "com.erdiha.driverapp"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAFhis3Ivs_yx5gi-Elk4Rt0Apr9LSBxfQ"
+        }
+      },
       "package": "com.erdiha.driverapp",
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
