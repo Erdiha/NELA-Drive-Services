@@ -26,10 +26,10 @@ const serializeRideData = (rides) => {
       acceptedAt: convertTimestamp(ride.acceptedAt),
       completedAt: convertTimestamp(ride.completedAt),
       scheduledDateTime: convertTimestamp(ride.scheduledDateTime),
-      locationUpdatedAt: convertTimestamp(ride.locationUpdatedAt), // ✅ NEW
-      timeoutAt: convertTimestamp(ride.timeoutAt), // ✅ NEW
-      startedAt: convertTimestamp(ride.startedAt), // ✅ NEW
-      cancelledAt: convertTimestamp(ride.cancelledAt), // ✅ NEW
+      locationUpdatedAt: convertTimestamp(ride.locationUpdatedAt),
+      timeoutAt: convertTimestamp(ride.timeoutAt),
+      startedAt: convertTimestamp(ride.startedAt),
+      cancelledAt: convertTimestamp(ride.cancelledAt),
     };
   });
 };
@@ -42,6 +42,7 @@ const rideSlice = createSlice({
     completedRides: [],
     isOnline: false,
     driverLocation: null,
+    incomingRideRequest: null,
     earnings: {
       today: 0,
       week: 0,
@@ -105,9 +106,17 @@ const rideSlice = createSlice({
         lastUpdated: new Date().toISOString(),
       };
     },
+    // ✅ FIXED: Added both incoming ride actions
+    setIncomingRideRequest: (state, action) => {
+      state.incomingRideRequest = action.payload;
+    },
+    clearIncomingRideRequest: (state) => {
+      state.incomingRideRequest = null;
+    },
   },
 });
 
+// ✅ FIXED: Export all actions including the new ones
 export const {
   setNewRides,
   setActiveRides,
@@ -120,6 +129,8 @@ export const {
   updateEarnings,
   setDriverRating,
   updateRideStatus,
+  setIncomingRideRequest,
+  clearIncomingRideRequest,
 } = rideSlice.actions;
 
 export const store = configureStore({
@@ -137,6 +148,8 @@ export const store = configureStore({
           "rides/setActiveRides",
           "rides/addActiveRide",
           "rides/addCompletedRide",
+          "rides/setIncomingRideRequest",
+          "rides/clearIncomingRideRequest",
         ],
         // ✅ Ignore these paths in state
         ignoredActionPaths: [

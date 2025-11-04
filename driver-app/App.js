@@ -19,7 +19,9 @@ import { Provider, useSelector, useDispatch } from "react-redux";
 import { store, setOnlineStatus } from "./src/store/store";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 // Import theme
 import theme from "./src/theme/theme";
 import { createPulse, fadeIn, fadeOut } from "./src/theme/animations";
@@ -39,6 +41,8 @@ import RideDetailsScreen from "./src/screens/RideDetailsScreen";
 import ReviewService from "./src/services/reviewService";
 import { setDriverRating } from "./src/store/store";
 import { getCurrentDriverId } from "./src/services/rideService";
+
+import CustomBottomSheet from "./src/components/CustomBottomSheet";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -61,7 +65,7 @@ const Icon = ({ name, size = 24, color = "#000" }) => {
     "power-outline": "⚡",
   };
 
-  return <Text style={{ fontSize: size }}>{icons[name] || "●"}</Text>;
+  return <Text style={{ fontSize: size }}>{icons[name] || "◯"}</Text>;
 };
 
 // Confirmation Modal Component
@@ -140,7 +144,7 @@ function StatusConfirmationModal({ visible, isOnline, onClose }) {
             style={styles.modalGradient}
           >
             <View style={styles.modalIcon}>
-              <Text style={styles.modalIconText}>{isOnline ? "✓" : "○"}</Text>
+              <Text style={styles.modalIconText}>{isOnline ? "✓" : "◯"}</Text>
             </View>
 
             <Text style={styles.modalTitle}>
@@ -162,7 +166,7 @@ function StatusConfirmationModal({ visible, isOnline, onClose }) {
 // Ride Preferences Modal
 function RidePreferencesModal({ visible, onClose }) {
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0.8)).current;
 
   const [preferences, setPreferences] = useState({
     acceptScheduled: true,
@@ -384,7 +388,8 @@ function RidePreferencesModal({ visible, onClose }) {
   );
 }
 
-function DashboardStack() {
+function DashboardStack({ route }) {
+  const { incomingRide } = route.params || {};
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DashboardScreen" component={DashboardScreen} />
@@ -506,7 +511,7 @@ function PlaceholderScreen() {
   return <View />;
 }
 
-function TabNavigator() {
+function TabNavigator({ incomingRide }) {
   const dispatch = useDispatch();
   const { isOnline } = useSelector((state) => state.rides);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -566,247 +571,15 @@ function TabNavigator() {
     }
   };
 
-  if (!isOnline) {
-    return (
-      <>
-        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-        <Tab.Navigator
-          screenOptions={({ route }) => ({
-            tabBarIcon: ({ focused, color }) => {
-              let iconName;
-              if (route.name === "Dashboard") {
-                iconName = focused ? "home" : "home-outline";
-              } else if (route.name === "Preferences") {
-                iconName = focused ? "settings" : "settings-outline";
-              }
-              return <Icon name={iconName} size={24} color={color} />;
-            },
-            tabBarActiveTintColor: theme.colors.primary.main,
-            tabBarInactiveTintColor: theme.colors.neutral[500],
-            headerShown: false,
-            tabBarStyle: {
-              backgroundColor: "#ffffff",
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              height: 70,
-              paddingBottom: 10,
-              paddingTop: 8,
-              borderTopWidth: 0,
-              elevation: 0,
-              shadowOpacity: 0,
-            },
-            tabBarLabelStyle: {
-              fontSize: 12,
-              fontWeight: "600",
-              marginTop: 4,
-            },
-          })}
-        >
-          <Tab.Screen
-            name="Dashboard"
-            component={DashboardStack}
-            options={{ tabBarLabel: "Home" }}
-          />
-          <Tab.Screen
-            name="GoOnline"
-            component={PlaceholderScreen}
-            listeners={{
-              tabPress: (e) => {
-                e.preventDefault();
-                toggleOnline();
-              },
-            }}
-            options={{
-              tabBarLabel: "Go Online",
-              tabBarIcon: () => (
-                <View style={styles.goOnlineIcon}>
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text style={{ fontSize: 26, marginTop: -2 }}>⚡</Text>
-                  )}
-                </View>
-              ),
-              tabBarLabelStyle: {
-                fontSize: 12,
-                fontWeight: "600",
-                marginTop: 6,
-              },
-            }}
-          />
-          <Tab.Screen
-            name="Preferences"
-            component={PlaceholderScreen}
-            listeners={{
-              tabPress: (e) => {
-                e.preventDefault();
-                setShowPreferences(true);
-              },
-            }}
-            options={{ tabBarLabel: "Preferences" }}
-          />
-        </Tab.Navigator>
-
-        <StatusConfirmationModal
-          visible={showConfirmation}
-          isOnline={pendingOnlineState}
-          onClose={() => setShowConfirmation(false)}
-        />
-
-        <RidePreferencesModal
-          visible={showPreferences}
-          onClose={() => setShowPreferences(false)}
-        />
-      </>
-    );
-  }
-
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color }) => {
-            let iconName;
-            if (route.name === "Dashboard") {
-              iconName = focused ? "home" : "home-outline";
-            } else if (route.name === "ActiveRides") {
-              iconName = focused ? "car" : "car-outline";
-            } else if (route.name === "Earnings") {
-              iconName = focused ? "cash" : "cash-outline";
-            } else if (route.name === "Settings") {
-              iconName = focused ? "person" : "person-outline";
-            }
-            return <Icon name={iconName} size={22} color={color} />;
-          },
-          tabBarActiveTintColor: "#ffffff",
-          tabBarInactiveTintColor: theme.colors.neutral[500],
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: "#ffffff",
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            height: 70,
-            paddingBottom: 10,
-            paddingTop: 8,
-            borderTopWidth: 0,
-            elevation: 0,
-            shadowOpacity: 0,
-          },
-          tabBarLabelStyle: {
-            fontSize: 11,
-            fontWeight: "600",
-            marginTop: -2,
-          },
-          tabBarItemStyle: {
-            paddingVertical: 4,
-          },
-          tabBarActiveBackgroundColor: "transparent",
-          tabBarInactiveBackgroundColor: "transparent",
-          tabBarButton: (props) => {
-            const isFocused = props.accessibilityState?.selected;
-            return (
-              <View
-                style={{
-                  overflow: "hidden",
-                  borderRadius: 12,
-                  marginHorizontal: 4,
-                  flex: 1,
-                }}
-              >
-                {isFocused && (
-                  <LinearGradient
-                    colors={theme.gradients.primary.colors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                )}
-                <TouchableOpacity {...props} style={props.style}>
-                  {props.children}
-                </TouchableOpacity>
-              </View>
-            );
-          },
-        })}
-      >
-        <Tab.Screen
-          name="Dashboard"
-          component={DashboardStack}
-          options={{ tabBarLabel: "Home" }}
-        />
-        <Tab.Screen
-          name="ActiveRides"
-          component={ActiveRidesStack}
-          options={{ tabBarLabel: "Active" }}
-        />
-        <Tab.Screen
-          name="Earnings"
-          component={EarningsScreen}
-          options={{
-            tabBarLabel: "Earnings",
-            headerShown: true,
-            headerStyle: {
-              backgroundColor: "transparent",
-              elevation: 0,
-              shadowOpacity: 0,
-            },
-            header: () => (
-              <LinearGradient
-                colors={theme.gradients.primary.colors}
-                start={theme.gradients.primary.start}
-                end={theme.gradients.primary.end}
-                style={{
-                  paddingTop: 15,
-                  paddingBottom: 16,
-                  paddingHorizontal: 16,
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#ffffff",
-                    fontSize: 20,
-                    fontWeight: "700",
-                  }}
-                >
-                  Earnings
-                </Text>
-              </LinearGradient>
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{
-            tabBarLabel: "Profile",
-            headerShown: true,
-            header: () => (
-              <LinearGradient
-                colors={theme.gradients.primary.colors}
-                start={theme.gradients.primary.start}
-                end={theme.gradients.primary.end}
-                style={{
-                  paddingTop: 15,
-                  paddingBottom: 16,
-                  paddingHorizontal: 16,
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#ffffff",
-                    fontSize: 20,
-                    fontWeight: "700",
-                  }}
-                >
-                  Settings
-                </Text>
-              </LinearGradient>
-            ),
-          }}
-        />
-      </Tab.Navigator>
-
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Dashboard" component={DashboardStack} />
+        <Stack.Screen name="ActiveRides" component={ActiveRidesStack} />
+        <Stack.Screen name="Earnings" component={EarningsScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
+      </Stack.Navigator>
       <StatusConfirmationModal
         visible={showConfirmation}
         isOnline={pendingOnlineState}
@@ -1032,6 +805,17 @@ const styles = StyleSheet.create({
   },
 });
 
+function AppContent() {
+  const navigation = useNavigation();
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <TabNavigator />
+      <CustomBottomSheet navigation={navigation} />
+    </GestureHandlerRootView>
+  );
+}
+// Main App component
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -1042,7 +826,7 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
         <Provider store={store}>
           <NavigationContainer>
-            <TabNavigator />
+            <AppContent />
           </NavigationContainer>
         </Provider>
       </SafeAreaView>
