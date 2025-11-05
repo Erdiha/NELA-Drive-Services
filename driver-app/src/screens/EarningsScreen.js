@@ -11,6 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSelector } from "react-redux";
 import { calculateEarnings } from "../services/rideService";
 import theme from "../theme/theme";
+import { useFocusEffect } from "@react-navigation/native";
 
 const AnimatedNumber = ({
   value,
@@ -54,7 +55,7 @@ const AnimatedNumber = ({
   );
 };
 
-const EarningsScreen = () => {
+const EarningsScreen = ({ navigation }) => {
   const { completedRides, rating } = useSelector((state) => state.rides);
   const [selectedPeriod, setSelectedPeriod] = useState("today");
   const [earnings, setEarnings] = useState({
@@ -63,6 +64,37 @@ const EarningsScreen = () => {
     period: "today",
   });
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTitle: "Earnings",
+      headerTitleAlign: "center",
+      headerBackground: () => (
+        <LinearGradient
+          colors={["white", "white"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ flex: 1 }}
+        />
+      ),
+      headerTintColor: "black",
+      headerTitleStyle: {
+        color: "black",
+        fontSize: 22,
+        fontWeight: "700",
+      },
+      headerStyle: {
+        height: 50, // overrides platform default
+      },
+
+      headerTitleContainerStyle: {
+        justifyContent: "center", // centers vertically
+        alignItems: "center",
+      },
+      headerBackTitleVisible: false,
+    });
+  }, [navigation]);
 
   useEffect(() => {
     loadEarnings();

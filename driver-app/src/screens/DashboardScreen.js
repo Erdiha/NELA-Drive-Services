@@ -18,6 +18,10 @@ import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import StatsModal from "../components/StatsModal";
 import MapViewDirections from "react-native-maps-directions";
 import theme from "../theme/theme";
+import DriverStatusControl from "../components/DriverStatusControl";
+import GoingOnlineTransition from "../components/GoingOnlineTransition";
+import OfflineControls from "../components/OfflineControls";
+import { Vibration } from "react-native";
 
 import {
   subscribeToNewRides,
@@ -57,6 +61,12 @@ export default function DashboardScreen({ navigation, incomingRide }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const mapRef = useRef(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [showGoingOnlineTransition, setShowGoingOnlineTransition] =
+    useState(false);
+
+  const [showQuickActions, setShowQuickActions] = useState(false);
+
+  const [goingOnline, setGoingOnline] = useState(false);
 
   useEffect(() => {
     initializeServices();
@@ -280,22 +290,44 @@ export default function DashboardScreen({ navigation, incomingRide }) {
 
   const handleGoOnline = async () => {
     try {
+      setGoingOnline(true);
+
       const location = await LocationService.getCurrentLocation();
       if (!location) {
         Alert.alert(
           "Location Required",
           "Please enable location services to go online."
         );
+        setGoingOnline(false);
         return;
       }
-      dispatch(setOnlineStatus(true));
-      NotificationService.sendRideUpdateNotification(
-        "You're Online",
-        "Ready to accept ride requests"
-      );
+
+      // Vibration
+      Vibration.vibrate([0, 100, 50, 100]);
+
+      // Delay for effect
+      setTimeout(() => {
+        setGoingOnline(false);
+        dispatch(setOnlineStatus(true));
+        NotificationService.sendRideUpdateNotification(
+          "You're Online",
+          "Ready to accept ride requests"
+        );
+      }, 1000);
     } catch (error) {
+      console.log("Error going online:", error);
+      setGoingOnline(false);
       Alert.alert("Error", "Failed to go online. Please try again.");
     }
+  };
+
+  const completeGoingOnline = () => {
+    setShowGoingOnlineTransition(false);
+    dispatch(setOnlineStatus(true));
+    NotificationService.sendRideUpdateNotification(
+      "You're Online",
+      "Ready to accept ride requests"
+    );
   };
 
   const handleRecenterMap = async () => {
@@ -458,145 +490,190 @@ export default function DashboardScreen({ navigation, incomingRide }) {
   // OFFLINE STATE
   if (!isOnline) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle="dark-content" />
-        <MapView
-          ref={mapRef}
-          style={styles.backgroundMap}
-          provider={PROVIDER_DEFAULT}
-          customMapStyle={customMapStyle}
-          showsUserLocation={true}
-          showsMyLocationButton={false}
-          zoomControlEnabled={false}
-          region={mapRegion}
-        >
-          {newRides.map((ride) => (
-            <React.Fragment key={`new-${ride.id}`}>
-              <Marker
-                coordinate={{
-                  latitude: ride.pickup.latitude,
-                  longitude: ride.pickup.longitude,
-                }}
-                title="New Ride - Pickup"
-                description={ride.pickup.address}
-                pinColor="green"
-              />
-              <Marker
-                coordinate={{
-                  latitude: ride.dropoff.latitude,
-                  longitude: ride.dropoff.longitude,
-                }}
-                title="New Ride - Dropoff"
-                description={ride.dropoff.address}
-                pinColor="red"
-              />
-              <MapViewDirections
-                origin={{
-                  latitude: ride.pickup.latitude,
-                  longitude: ride.pickup.longitude,
-                }}
-                destination={{
-                  latitude: ride.dropoff.latitude,
-                  longitude: ride.dropoff.longitude,
-                }}
-                apikey={GOOGLE_MAPS_APIKEY}
-                strokeWidth={3}
-                strokeColor="#8b5cf6"
-                lineDashPattern={[10, 5]}
-                lineCap="round"
-                lineJoin="round"
-              />
-            </React.Fragment>
-          ))}
-
-          {activeRides.map((ride) => (
-            <React.Fragment key={`active-${ride.id}`}>
-              <Marker
-                coordinate={{
-                  latitude: ride.pickup.latitude,
-                  longitude: ride.pickup.longitude,
-                }}
-                title="Active Pickup"
-                description={ride.pickup.address}
-                pinColor="#fbbf24"
-              />
-              <Marker
-                coordinate={{
-                  latitude: ride.dropoff.latitude,
-                  longitude: ride.dropoff.longitude,
-                }}
-                title="Active Dropoff"
-                description={ride.dropoff.address}
-                pinColor="#f97316"
-              />
-              <MapViewDirections
-                origin={{
-                  latitude: ride.pickup.latitude,
-                  longitude: ride.pickup.longitude,
-                }}
-                destination={{
-                  latitude: ride.dropoff.latitude,
-                  longitude: ride.dropoff.longitude,
-                }}
-                apikey={GOOGLE_MAPS_APIKEY}
-                strokeWidth={6}
-                strokeColor="#ec4899"
-              />
-            </React.Fragment>
-          ))}
-        </MapView>
-
-        <View style={styles.zoomControls}>
-          <TouchableOpacity
-            style={styles.zoomButton}
-            onPress={() => {
-              if (mapRef.current) {
-                mapRef.current.getCamera().then((camera) => {
-                  camera.zoom += 1;
-                  mapRef.current.animateCamera(camera);
-                });
-              }
-            }}
+      <>
+        <View style={styles.container}>
+          <StatusBar barStyle="dark-content" />
+          <MapView
+            ref={mapRef}
+            style={styles.backgroundMap}
+            provider={PROVIDER_DEFAULT}
+            customMapStyle={customMapStyle}
+            showsUserLocation={true}
+            showsMyLocationButton={false}
+            zoomControlEnabled={false}
+            region={mapRegion}
           >
-            <Text style={styles.zoomText}>+</Text>
-          </TouchableOpacity>
+            {newRides.map((ride) => (
+              <React.Fragment key={`new-${ride.id}`}>
+                <Marker
+                  coordinate={{
+                    latitude: ride.pickup.latitude,
+                    longitude: ride.pickup.longitude,
+                  }}
+                  title="New Ride - Pickup"
+                  description={ride.pickup.address}
+                  pinColor="green"
+                />
+                <Marker
+                  coordinate={{
+                    latitude: ride.dropoff.latitude,
+                    longitude: ride.dropoff.longitude,
+                  }}
+                  title="New Ride - Dropoff"
+                  description={ride.dropoff.address}
+                  pinColor="red"
+                />
+                <MapViewDirections
+                  origin={{
+                    latitude: ride.pickup.latitude,
+                    longitude: ride.pickup.longitude,
+                  }}
+                  destination={{
+                    latitude: ride.dropoff.latitude,
+                    longitude: ride.dropoff.longitude,
+                  }}
+                  apikey={GOOGLE_MAPS_APIKEY}
+                  strokeWidth={3}
+                  strokeColor="#8b5cf6"
+                  lineDashPattern={[10, 5]}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              </React.Fragment>
+            ))}
+
+            {activeRides.map((ride) => (
+              <React.Fragment key={`active-${ride.id}`}>
+                <Marker
+                  coordinate={{
+                    latitude: ride.pickup.latitude,
+                    longitude: ride.pickup.longitude,
+                  }}
+                  title="Active Pickup"
+                  description={ride.pickup.address}
+                  pinColor="#fbbf24"
+                />
+                <Marker
+                  coordinate={{
+                    latitude: ride.dropoff.latitude,
+                    longitude: ride.dropoff.longitude,
+                  }}
+                  title="Active Dropoff"
+                  description={ride.dropoff.address}
+                  pinColor="#f97316"
+                />
+                <MapViewDirections
+                  origin={{
+                    latitude: ride.pickup.latitude,
+                    longitude: ride.pickup.longitude,
+                  }}
+                  destination={{
+                    latitude: ride.dropoff.latitude,
+                    longitude: ride.dropoff.longitude,
+                  }}
+                  apikey={GOOGLE_MAPS_APIKEY}
+                  strokeWidth={6}
+                  strokeColor="#ec4899"
+                />
+              </React.Fragment>
+            ))}
+          </MapView>
+
+          <View style={[styles.zoomControls, styles.zoomControlsOffline]}>
+            <TouchableOpacity
+              style={styles.zoomButton}
+              onPress={() => {
+                if (mapRef.current) {
+                  mapRef.current.getCamera().then((camera) => {
+                    camera.zoom += 1;
+                    mapRef.current.animateCamera(camera);
+                  });
+                }
+              }}
+            >
+              <Text style={styles.zoomText}>+</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.zoomButton}
+              onPress={() => {
+                if (mapRef.current) {
+                  mapRef.current.getCamera().then((camera) => {
+                    camera.zoom -= 1;
+                    mapRef.current.animateCamera(camera);
+                  });
+                }
+              }}
+            >
+              <Text style={styles.zoomText}>−</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
-            style={styles.zoomButton}
-            onPress={() => {
-              if (mapRef.current) {
-                mapRef.current.getCamera().then((camera) => {
-                  camera.zoom -= 1;
-                  mapRef.current.animateCamera(camera);
-                });
-              }
-            }}
+            style={[styles.locationButtonBottom, styles.locationButtonOffline]}
+            onPress={handleRecenterMap}
           >
-            <Text style={styles.zoomText}>−</Text>
+            <MaterialIcons name="my-location" size={20} color="#4285F4" />
           </TouchableOpacity>
+
+          <View style={styles.bottomButtonContainer}>
+            <TouchableOpacity
+              style={styles.goOnlineButtonContainer}
+              onPress={handleGoOnline}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={theme.gradients.primary.colors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.goOnlineGradient}
+              >
+                <View style={styles.buttonContent}>
+                  {goingOnline ? (
+                    <>
+                      <MaterialIcons
+                        name="hourglass-empty"
+                        size={20}
+                        color="white"
+                      />
+                      <Text style={styles.goOnlineText}>Going Online...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <MaterialIcons
+                        name="power"
+                        size={20}
+                        color="white"
+                        style={styles.buttonIcon}
+                      />
+                      <Text style={styles.goOnlineText}>Go Online</Text>
+                      <Text style={styles.goOnlineSubtext}>
+                        Start accepting rides
+                      </Text>
+                    </>
+                  )}
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionsIcon}
+              onPress={() => setShowQuickActions(true)}
+            >
+              <MaterialIcons name="more-horiz" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.locationButtonBottom}
-          onPress={handleRecenterMap}
-        >
-          <MaterialIcons name="my-location" size={20} color="#4285F4" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.floatingGoOnlineButton}
-          onPress={handleGoOnline}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={theme.gradients.primary.colors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.goOnlineGradient}
-          >
-            <Text style={styles.goOnlineText}>⚡ Go Online</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+        <OfflineControls
+          visible={showQuickActions}
+          onClose={() => setShowQuickActions(false)}
+          onOpenPreferences={() => console.log("Preferences pressed")}
+          onOpenEarnings={() => {
+            setShowQuickActions(false);
+            navigation.navigate("Earnings");
+          }}
+          onOpenSettings={() => console.log("Settings pressed")}
+        />
+      </>
     );
   }
 
@@ -750,11 +827,67 @@ export default function DashboardScreen({ navigation, incomingRide }) {
         activeRides={activeRides.length}
         onGoOffline={() => dispatch(setOnlineStatus(false))}
       />
+      {showGoingOnlineTransition && (
+        <View
+          style={{
+            position: "absolute",
+            top: 100,
+            left: 50,
+            right: 50,
+            height: 100,
+            backgroundColor: "red",
+            zIndex: 1000,
+          }}
+        >
+          <Text style={{ color: "white", textAlign: "center", marginTop: 40 }}>
+            TRANSITION TEST
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  zoomControlsOffline: {
+    bottom: 150, // Lower position when offline
+  },
+  locationButtonOffline: {
+    bottom: 150, // Lower position when offline
+  },
+  bottomButtonContainer: {
+    position: "absolute",
+    bottom: 20,
+    left: 20,
+    right: 20,
+    flexDirection: "row",
+    gap: 12,
+  },
+  goOnlineButtonContainer: {
+    flex: 3,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  quickActionsIcon: {
+    flex: 1,
+    backgroundColor: "white",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    ...theme.shadows.md,
+  },
+  buttonContent: {
+    alignItems: "center",
+  },
+  buttonIcon: {
+    marginBottom: 4,
+  },
+  goOnlineSubtext: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "rgba(255, 255, 255, 0.8)",
+    marginTop: 2,
+  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.background.primary,

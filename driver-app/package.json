@@ -13,6 +13,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.6",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/slider": "^5.1.0",
     "@react-native-vector-icons/common": "^12.3.1",
     "@react-native-vector-icons/evil-icons": "^12.3.0",
     "@react-native-vector-icons/fontawesome6": "^12.2.0",
