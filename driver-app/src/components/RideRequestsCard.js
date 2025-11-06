@@ -53,9 +53,9 @@ const RideRequestCard = ({
 
   useEffect(() => {
     // Play notification sound (bypasses silent mode) - LOOPS
-    setTimeout(() => {
-      SoundService.playRideRequestSound();
-    }, 0);
+    setTimeout(async () => {
+      await SoundService.playRideRequestSound();
+    }, 100);
 
     // Vibrate pattern: [delay, vibrate, pause, vibrate, pause, vibrate]
     Vibration.vibrate([0, 100, 50, 100, 50, 100]);
@@ -111,7 +111,9 @@ const RideRequestCard = ({
   // Cleanup: Stop sound when card is dismissed
   useEffect(() => {
     return () => {
-      SoundService.stopRideRequestSound();
+      setTimeout(() => {
+        SoundService.stopRideRequestSound();
+      }, 0);
       console.log("🛑 Ride request card dismissed - sound stopped");
     };
   }, []);

@@ -69,6 +69,15 @@ export default function DashboardScreen({ navigation, incomingRide }) {
   const [goingOnline, setGoingOnline] = useState(false);
 
   useEffect(() => {
+    // Reset on mount
+    setShowQuickActions(false);
+
+    return () => {
+      stopLocationTracking();
+    };
+  }, []);
+
+  useEffect(() => {
     initializeServices();
   }, []);
 
@@ -663,16 +672,15 @@ export default function DashboardScreen({ navigation, incomingRide }) {
             </TouchableOpacity>
           </View>
         </View>
-        <OfflineControls
-          visible={showQuickActions}
-          onClose={() => setShowQuickActions(false)}
-          onOpenPreferences={() => console.log("Preferences pressed")}
-          onOpenEarnings={() => {
-            setShowQuickActions(false);
-            navigation.navigate("Earnings");
-          }}
-          onOpenSettings={() => console.log("Settings pressed")}
-        />
+        {!isOnline && showQuickActions && (
+          <View style={styles.persistentControls}>
+            <OfflineControls
+              navigation={navigation}
+              currentRoute="Dashboard"
+              onClose={() => setShowQuickActions(false)}
+            />
+          </View>
+        )}
       </>
     );
   }
@@ -849,6 +857,12 @@ export default function DashboardScreen({ navigation, incomingRide }) {
 }
 
 const styles = StyleSheet.create({
+  persistentControls: {
+    position: "absolute",
+    bottom: 20,
+    left: 20,
+    right: 20,
+  },
   zoomControlsOffline: {
     bottom: 150, // Lower position when offline
   },

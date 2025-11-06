@@ -28,6 +28,7 @@ import { getCurrentDriverId } from "../services/rideService";
 import { LinearGradient } from "expo-linear-gradient";
 import theme from "../theme/theme";
 import { useSelector } from "react-redux";
+import { MaterialIcons } from "@expo/vector-icons";
 
 const StarRating = ({ rating }) => {
   const stars = [];
@@ -75,7 +76,7 @@ const StarRating = ({ rating }) => {
 
   return <View style={{ flexDirection: "row", gap: 2 }}>{stars}</View>;
 };
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) {
   const [profile, setProfile] = useState({
     name: "Erdi Haciogullari",
     email: "erdiha@gmail.com",
@@ -100,6 +101,32 @@ export default function SettingsScreen() {
     const sum = reviews.reduce((acc, review) => acc + review.rating, 0);
     return (sum / reviews.length).toFixed(1);
   };
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTitle: "Settings",
+      headerTitleAlign: "center",
+
+      headerTitleStyle: {
+        fontSize: 28,
+        fontWeight: "900",
+      },
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Dashboard")}
+          style={{
+            paddingLeft: 16,
+            paddingVertical: 8,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <MaterialIcons name="arrow-back" size={34} color="#000" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   useEffect(() => {
     loadProfile();

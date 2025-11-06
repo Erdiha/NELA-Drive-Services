@@ -1,40 +1,12 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  Dimensions,
-} from "react-native";
-import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import EarningsScreen from "../screens/EarningsScreen";
-import RidePreferencesScreen from "../screens/RidePreferencesScreen";
-import SettingsScreen from "../screens/SettingsScreen";
+import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { MaterialIcons } from "@expo/vector-icons";
 
-const { width } = Dimensions.get("window");
-
-const OfflineControls = ({ visible, onClose }) => {
-  const [currentSlide, setCurrentSlide] = useState(0);
-
-  const showContent = (slideIndex) => {
-    setCurrentSlide(slideIndex);
-  };
-
-  const hideContent = () => {
-    setCurrentSlide(0);
-  };
-
-  const handleOverlayPress = () => {
-    onClose();
-  };
-
-  const handleContainerPress = (e) => {
-    e.stopPropagation();
-  };
-
+const OfflineControls = ({ visible, onClose, navigation, currentRoute }) => {
   return (
     <Modal
+      key={visible ? "open" : "closed"}
       visible={visible}
       transparent={true}
       animationType="slide"
@@ -43,81 +15,33 @@ const OfflineControls = ({ visible, onClose }) => {
       <TouchableOpacity
         style={styles.overlay}
         activeOpacity={1}
-        onPress={handleOverlayPress}
+        onPress={onClose}
       >
-        {/* Content Container */}
-        {currentSlide > 0 && (
-          <View
-            style={styles.carouselContainer}
-            onStartShouldSetResponder={() => true}
-          >
-            {/* Earnings */}
-            {currentSlide === 1 && (
-              <View style={styles.slide}>
-                <View style={styles.slideHeader}>
-                  <TouchableOpacity onPress={hideContent}>
-                    <MaterialIcons name="close" size={24} color="#666" />
-                  </TouchableOpacity>
-                  <Text style={styles.slideTitle}>Earnings</Text>
-                  <View style={{ width: 24 }} />
-                </View>
-                <View style={styles.screenContainer}>
-                  <EarningsScreen navigation={{ setOptions: () => {} }} />
-                </View>
-              </View>
-            )}
-
-            {/* Settings */}
-            {currentSlide === 2 && (
-              <View style={styles.slide}>
-                <View style={styles.slideHeader}>
-                  <TouchableOpacity onPress={hideContent}>
-                    <MaterialIcons name="close" size={24} color="#666" />
-                  </TouchableOpacity>
-                  <Text style={styles.slideTitle}>Settings</Text>
-                  <View style={{ width: 24 }} />
-                </View>
-                <View style={styles.screenContainer}>
-                  <SettingsScreen />
-                </View>
-              </View>
-            )}
-            {/* Preferences */}
-            {currentSlide === 3 && (
-              <View style={styles.slide}>
-                <View style={styles.slideHeader}>
-                  <TouchableOpacity onPress={hideContent}>
-                    <MaterialIcons name="close" size={24} color="#666" />
-                  </TouchableOpacity>
-                  <Text style={styles.slideTitle}>Ride Preferences</Text>
-                  <View style={{ width: 24 }} />
-                </View>
-                <View style={styles.screenContainer}>
-                  <RidePreferencesScreen />
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Quick Actions Menu */}
         <View style={styles.quickActionsMenu}>
           <TouchableOpacity
-            style={[
-              styles.controlButton,
-              currentSlide === 3 && styles.controlButtonActive,
-            ]}
-            onPress={() => showContent(3)}
+            style={styles.controlButton}
+            onPress={() => {
+              onClose();
+              navigation.navigate("Settings");
+            }}
           >
+            {currentRoute === "RidePreferences" && (
+              <LinearGradient
+                colors={["#7c3aed", "#f59e0b"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             <MaterialIcons
               name="tune"
               size={20}
-              color={currentSlide === 3 ? "#ffffff" : "#7c3aed"}
+              color={currentRoute === "RidePreferences" ? "#ffffff" : "#7c3aed"}
             />
             <Text
               style={[
                 styles.controlText,
-                currentSlide === 3 && styles.controlTextActive,
+                currentRoute === "RidePreferences" && styles.controlTextActive,
               ]}
             >
               Ride Preferences
@@ -125,26 +49,34 @@ const OfflineControls = ({ visible, onClose }) => {
             <MaterialIcons
               name="chevron-right"
               size={16}
-              color={currentSlide === 3 ? "#ffffff" : "#666"}
+              color={currentRoute === "RidePreferences" ? "#ffffff" : "#666"}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.controlButton,
-              currentSlide === 1 && styles.controlButtonActive,
-            ]}
-            onPress={() => showContent(1)}
+            style={styles.controlButton}
+            onPress={() => {
+              onClose();
+              navigation.navigate("Earnings");
+            }}
           >
+            {currentRoute === "Earnings" && (
+              <LinearGradient
+                colors={["#7c3aed", "#f59e0b"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             <MaterialIcons
               name="attach-money"
               size={20}
-              color={currentSlide === 1 ? "#ffffff" : "#7c3aed"}
+              color={currentRoute === "Earnings" ? "#ffffff" : "#7c3aed"}
             />
             <Text
               style={[
                 styles.controlText,
-                currentSlide === 1 && styles.controlTextActive,
+                currentRoute === "Earnings" && styles.controlTextActive,
               ]}
             >
               View Earnings
@@ -152,26 +84,34 @@ const OfflineControls = ({ visible, onClose }) => {
             <MaterialIcons
               name="chevron-right"
               size={16}
-              color={currentSlide === 1 ? "#ffffff" : "#666"}
+              color={currentRoute === "Earnings" ? "#ffffff" : "#666"}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.controlButton,
-              currentSlide === 2 && styles.controlButtonActive,
-            ]}
-            onPress={() => showContent(2)}
+            style={styles.controlButton}
+            onPress={() => {
+              onClose();
+              navigation.navigate("Settings");
+            }}
           >
+            {currentRoute === "Settings" && (
+              <LinearGradient
+                colors={["#7c3aed", "#f59e0b"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             <MaterialIcons
               name="settings"
               size={20}
-              color={currentSlide === 2 ? "#ffffff" : "#7c3aed"}
+              color={currentRoute === "Settings" ? "#ffffff" : "#7c3aed"}
             />
             <Text
               style={[
                 styles.controlText,
-                currentSlide === 2 && styles.controlTextActive,
+                currentRoute === "Settings" && styles.controlTextActive,
               ]}
             >
               Driver Settings
@@ -179,7 +119,7 @@ const OfflineControls = ({ visible, onClose }) => {
             <MaterialIcons
               name="chevron-right"
               size={16}
-              color={currentSlide === 2 ? "#ffffff" : "#666"}
+              color={currentRoute === "Settings" ? "#ffffff" : "#666"}
             />
           </TouchableOpacity>
         </View>
@@ -191,89 +131,28 @@ const OfflineControls = ({ visible, onClose }) => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
     justifyContent: "flex-end",
-    padding: 20,
-  },
-  carouselContainer: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    right: 20,
-    bottom: 300,
-    backgroundColor: "white",
-    borderRadius: 20,
-    overflow: "hidden",
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  slide: {
-    width: width - 40,
-    height: "100%",
-  },
-  slideHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e5e5",
-  },
-  slideTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#000",
-  },
-  slideContent: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    marginTop: 50,
-  },
-  screenContainer: {
-    flex: 1,
+    padding: 10,
   },
   quickActionsMenu: {
-    position: "absolute",
-    bottom: 20,
-    left: 20,
-    right: 20,
     backgroundColor: "white",
     borderRadius: 20,
-    padding: 20,
+    padding: 16,
     elevation: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
-  },
-  menuHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  menuTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#000",
-    flex: 1,
-    textAlign: "center",
-  },
-  closeButton: {
-    padding: 4,
   },
   controlButton: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e5e5",
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    overflow: "hidden",
+    marginBottom: 4,
   },
   controlText: {
     flex: 1,
@@ -281,9 +160,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#000",
     marginLeft: 12,
-  },
-  controlButtonActive: {
-    backgroundColor: "#7c3aed",
   },
   controlTextActive: {
     color: "#ffffff",
