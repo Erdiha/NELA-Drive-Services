@@ -801,7 +801,7 @@ function App() {
                 <span className="text-white text-2xl font-bold">N</span>
               </div>
               <span className="text-xl text-brand relative">
-                NELA{" "}
+                NELA
                 <span className="text-black/60 font-thin italic text-xs absolute bottom-[-7px] right-[-5px] bg-white/10 ">
                   Ride
                 </span>

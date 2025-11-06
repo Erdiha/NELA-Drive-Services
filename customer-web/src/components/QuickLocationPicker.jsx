@@ -17,8 +17,8 @@ const QuickLocationPicker = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-hidden">
+    <div className="fixed inset-0 md:bg-black/50 bg-transparent flex items-center justify-center z-50 md:p-4">
+      <div className="bg-white rounded-2xl max-w-lg w-full md:max-h-[80vh] overflow-hidden">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xl font-bold text-gray-900">Quick Locations</h3>
@@ -44,7 +44,7 @@ const QuickLocationPicker = ({
           <p className="text-sm text-gray-600">Popular pickup/drop-off spots</p>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[500px]">
+        <div className="md:p-6 p-4 overflow-y-auto max-h-[500px]">
           <div className="grid grid-cols-1 gap-3">
             {QUICK_LOCATIONS.map((location) => (
               <button

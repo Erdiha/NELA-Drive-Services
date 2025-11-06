@@ -147,7 +147,7 @@ function ScheduleCalendar({ isOpen, onClose, onSelectDateTime, minDateTime }) {
         className="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden "
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-3xl ">
+        <div className="bg-gradient-to-r   from-[#7c3aed] to-[#f59e0b] text-white p-6 rounded-t-3xl ">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold">Schedule Your Ride</h2>
             <motion.button
